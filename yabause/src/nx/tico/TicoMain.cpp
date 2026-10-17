@@ -1446,6 +1446,8 @@ static void ShutdownFrontend()
 
 int main(int argc, char **argv)
 {
+    // Mesa's shader cache beside this core's files, not at the SD card's root
+    tico::UseShaderCacheDir("sdmc:/tico/system/yabasanshiro/cache/mesa");
     LOG_INFO("HOME", "YabaSanshiro starting (argc=%d)", argc);
 
     if (R_FAILED(romfsInit()))
