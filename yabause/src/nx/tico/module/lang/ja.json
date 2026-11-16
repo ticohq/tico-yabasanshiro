@@ -35,6 +35,7 @@
   "settings_yabasanshiro_vdp2_composite": "VDP2合成",
   "settings_yabasanshiro_section_sound": "サウンド",
   "settings_yabasanshiro_scsp_sync": "1フレームあたりのサウンド同期",
+  "settings_yabasanshiro_high_quality_sound": "高音質サウンド",
   "settings_yabasanshiro_section_bios": "BIOS",
   "settings_yabasanshiro_bios": "BIOS",
   "settings_yabasanshiro_skip_bios_intro": "BIOSのイントロをスキップ",

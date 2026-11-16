@@ -223,7 +223,12 @@ namespace YabaSanshiro_Options
             None = 0,
             FXAA = 1,
             Scanline = 2,
-            Bilinear = 3
+            Bilinear = 3,
+            // The CRT filters (ygl.h AA_CRT_*): the picture at the Saturn's own
+            // resolution through one of RetroArch's CRT shaders
+            CrtHyllian = 4,
+            CrtLottes = 5,
+            CrtNewPixie = 6
         };
 
         inline const char *GetValue(Enum e)
@@ -238,6 +243,12 @@ namespace YabaSanshiro_Options
                 return "Scanline";
             case Enum::Bilinear:
                 return "Bilinear";
+            case Enum::CrtHyllian:
+                return "CRT Hyllian";
+            case Enum::CrtLottes:
+                return "CRT Lottes";
+            case Enum::CrtNewPixie:
+                return "CRT NewPixie";
             }
             return Default;
         }
@@ -252,6 +263,12 @@ namespace YabaSanshiro_Options
                 return Enum::Scanline;
             if (strcmp(v, "Bilinear") == 0)
                 return Enum::Bilinear;
+            if (strcmp(v, "CRT Hyllian") == 0)
+                return Enum::CrtHyllian;
+            if (strcmp(v, "CRT Lottes") == 0)
+                return Enum::CrtLottes;
+            if (strcmp(v, "CRT NewPixie") == 0)
+                return Enum::CrtNewPixie;
             return Enum::None;
         }
         inline int ToInt(Enum e) { return static_cast<int>(e); }
@@ -537,6 +554,17 @@ namespace YabaSanshiro_Options
     {
         constexpr const char *Key = "async_rendering";
         constexpr const char *Default = "disabled"; // Better performance, enabled by default
+        using Enum = BoolOption::Enum;
+        using Option = BoolOption;
+    }
+
+    // The SCSP's output rendered again without the hardware's shortcuts
+    // (sound_hq/scsp_hq.h), with its effects in floating point: what
+    // Android's "High-quality sound" turns on. The chip itself is unchanged.
+    namespace HighQualitySound
+    {
+        constexpr const char *Key = "high_quality_sound";
+        constexpr const char *Default = "disabled";
         using Enum = BoolOption::Enum;
         using Option = BoolOption;
     }

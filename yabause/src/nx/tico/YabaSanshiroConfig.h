@@ -45,6 +45,7 @@ public:
     int GetShowFPS() const;
     int GetRotateScreen() const;
     int GetSH2Cache() const;
+    int GetHighQualitySound() const; // 1=the high-quality SCSP output and float DSP
     int GetSkipLoad() const;
     int GetAsyncRendering() const; // 1=async VDP thread (better perf), 0=sync
     int GetRBGComputeShader() const; // 1=use compute shader for RBG (better perf), 0=legacy

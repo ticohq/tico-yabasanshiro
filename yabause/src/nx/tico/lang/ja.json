@@ -198,6 +198,7 @@
   "settings_yabasanshiro_renderer": "レンダラー",
   "settings_yabasanshiro_rotate_screen": "画面回転",
   "settings_yabasanshiro_scsp_sync": "1フレームあたりのサウンド同期",
+  "settings_yabasanshiro_high_quality_sound": "高音質サウンド",
   "settings_yabasanshiro_section_bios": "BIOS",
   "settings_yabasanshiro_section_cartridge": "カートリッジ",
   "settings_yabasanshiro_section_controllers": "コントローラー",

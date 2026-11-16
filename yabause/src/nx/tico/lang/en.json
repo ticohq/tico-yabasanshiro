@@ -198,6 +198,7 @@
   "settings_yabasanshiro_renderer": "Renderer",
   "settings_yabasanshiro_rotate_screen": "Rotate Screen",
   "settings_yabasanshiro_scsp_sync": "Sound syncs per frame",
+  "settings_yabasanshiro_high_quality_sound": "High-quality sound",
   "settings_yabasanshiro_section_bios": "BIOS",
   "settings_yabasanshiro_section_cartridge": "Cartridge",
   "settings_yabasanshiro_section_controllers": "Controllers",

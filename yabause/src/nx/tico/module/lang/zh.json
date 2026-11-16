@@ -35,6 +35,7 @@
   "settings_yabasanshiro_vdp2_composite": "VDP2 合成",
   "settings_yabasanshiro_section_sound": "声音",
   "settings_yabasanshiro_scsp_sync": "每帧声音同步次数",
+  "settings_yabasanshiro_high_quality_sound": "高品质音效",
   "settings_yabasanshiro_section_bios": "BIOS",
   "settings_yabasanshiro_bios": "BIOS",
   "settings_yabasanshiro_skip_bios_intro": "跳过 BIOS 开场",

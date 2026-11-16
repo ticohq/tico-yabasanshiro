@@ -210,6 +210,12 @@ int YabaSanshiroConfig::GetAsyncRendering() const
     return BoolOption::ToInt(BoolOption::FromString(v));
 }
 
+int YabaSanshiroConfig::GetHighQualitySound() const
+{
+    const char *v = GetConfigValue(HighQualitySound::Key, HighQualitySound::Default);
+    return BoolOption::ToInt(BoolOption::FromString(v));
+}
+
 int YabaSanshiroConfig::GetRBGComputeShader() const
 {
     const char *v = GetConfigValue(RBGComputeShader::Key, RBGComputeShader::Default);
@@ -267,6 +273,7 @@ void YabaSanshiroConfig::CreateDefaultConfig(const char *configPath)
 
     // ── Audio ──
     "scsp_sync": 1,
+    "high_quality_sound": "disabled",
 
     // ── Rendering ──
     "rbg_use_compute_shader": "enabled",

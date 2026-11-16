@@ -1389,6 +1389,19 @@ static int InitEmulator()
         LOG_ERROR("EMU", "YabauseInit failed");
         return -1;
     }
+    // High-quality sound, both parts together as Android does: the renderer
+    // and its float effect DSP. Set after YabauseInit so no init path loses it
+    // (only the new SCSP, use_new_scsp above, renders it).
+    {
+        const int hq = g_config.GetHighQualitySound();
+        if (hq) {
+            ScspSetHighQualityFloatDsp(1);
+            ScspSetHighQuality(1);
+        } else {
+            ScspSetHighQuality(0);
+            ScspSetHighQualityFloatDsp(0);
+        }
+    }
     LogStart();
     return 0;
 }

@@ -134,6 +134,18 @@
                 {
                   "label": "Bilinear",
                   "value": "Bilinear"
+                },
+                {
+                  "label": "CRT Hyllian",
+                  "value": "CRT Hyllian"
+                },
+                {
+                  "label": "CRT Lottes",
+                  "value": "CRT Lottes"
+                },
+                {
+                  "label": "CRT NewPixie",
+                  "value": "CRT NewPixie"
                 }
               ],
               "restart": true
@@ -661,6 +673,13 @@
                   "value": "255"
                 }
               ],
+              "restart": true
+            },
+            {
+              "key": "high_quality_sound",
+              "label": "settings_yabasanshiro_high_quality_sound",
+              "type": "bool",
+              "default": "disabled",
               "restart": true
             }
           ]
