@@ -36,6 +36,9 @@ data class DeviceCapabilities(
         private const val FEATURE_PC = "com.google.android.play.feature.HPE_EXPERIENCE"
         const val GL_ES_31 = 0x30001
 
+        /** Cheap Google Play Games on PC check, without the GPU probes of [forContext]. */
+        fun isPc(context: Context): Boolean = context.packageManager.hasSystemFeature(FEATURE_PC)
+
         fun forContext(context: Context): DeviceCapabilities {
             val pm = context.packageManager
             val vulkan = pm.hasSystemFeature(PackageManager.FEATURE_VULKAN_HARDWARE_LEVEL)
@@ -64,7 +67,7 @@ data class DeviceCapabilities(
                 glEsVersion = glEsVersion,
                 hasTessellation = tessellation,
                 cpuMaxClockKHz = CpuClock.maxKhz(),
-                isPc = pm.hasSystemFeature(FEATURE_PC),
+                isPc = isPc(context),
                 gpuKey = gpuKey,
                 vulkanTessellation = vulkanTessellation,
             )

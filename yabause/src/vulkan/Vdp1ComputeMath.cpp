@@ -1,7 +1,9 @@
 #include "Vdp1ComputeMath.h"
+#include "../vdp1texrow.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 
 namespace vdp1c {
 
@@ -76,6 +78,47 @@ bool normalizeWinding(glm::vec2& a, glm::vec2& b, glm::vec2& c, glm::vec2& d) {
         return false;
     }
     return true;
+}
+
+// The closed forms live in vdp1texrow.h so the C OpenGL core and the
+// graphics tessellation path share them.
+int vdp1TexRow(int k, int n, int t0, int t1) { return vdp1_tex_row(k, n, t0, t1); }
+
+namespace {
+inline int cheb13(glm::ivec2 a, glm::ivec2 b) { return vdp1_cheb13(a.x, a.y, b.x, b.y); }
+}  // namespace
+
+int vdp1CmdDmax(glm::ivec2 a, glm::ivec2 b, glm::ivec2 c, glm::ivec2 d) {
+    const int v[8] = {a.x, a.y, b.x, b.y, c.x, c.y, d.x, d.y};
+    return vdp1_cmd_dmax(v);
+}
+
+int vdp1LineLen(glm::ivec2 a, glm::ivec2 b) { return cheb13(a, b); }
+
+std::array<glm::ivec2, 4> normalSpriteQuad(int x, int y, int w, int h) {
+    const int x1 = x + std::max(w, 1) - 1;
+    const int y1 = y + std::max(h, 1) - 1;
+    return {{glm::ivec2(x, y), glm::ivec2(x1, y), glm::ivec2(x1, y1), glm::ivec2(x, y1)}};
+}
+
+uint32_t packSpriteSteps(const std::array<glm::ivec2, 4>& v) {
+    const uint32_t dmax = static_cast<uint32_t>(vdp1CmdDmax(v[0], v[1], v[2], v[3]));
+    const uint32_t len = static_cast<uint32_t>(std::min(vdp1LineLen(v[0], v[1]), 0xFFFF));
+    return dmax | (len << 16);
+}
+
+int vdp1OneLineTexU(glm::vec2 p, glm::ivec2 a, glm::ivec2 b, glm::vec2 scale,
+                    int lenAB, int w, bool flipH) {
+    const glm::vec2 e = glm::vec2(b - a);
+    const float ee = glm::dot(e, e);
+    float t = 0.0f;
+    if (ee > 0.0f) {
+        const glm::vec2 q = p - 0.5f * scale - glm::vec2(a);
+        t = std::min(1.0f, std::max(0.0f, glm::dot(q, e) / ee));
+    }
+    // roundEven, as in GLSL.
+    const int j = static_cast<int>(std::nearbyint(t * static_cast<float>(lenAB)));
+    return vdp1TexRow(j, lenAB + 1, flipH ? w - 1 : 0, flipH ? 0 : w - 1);
 }
 
 Vdp1Cmd encodePolygon(
@@ -369,8 +412,18 @@ void applyState(Vdp1Cmd& cmd, const Vdp1State& s, bool inclusiveVerts) {
         // Sega Rally) -- the supercover band closes the remaining inter-poly
         // gaps where two thin polygons share an edge that rounds to the
         // same screen pixel.
+        // One-line sprite: both side edges have length 0 (A == D and
+        // B == C), so VDP1 draws dmax + 1 = 1 line from A to B even though
+        // the quad has zero area. isThinPolygonGeometric rejects zero-area
+        // quads, and the shaders' one-cell extension only rebuilds a drawable
+        // quad when the line is horizontal (their axis-aligned case), so a
+        // vertical or diagonal one-line sprite drew nothing. Route it through
+        // the FLAG_THIN supercover band, which covers the A-B segment.
+        const bool oneLineSprite =
+            cmd.cmdType == VDP1C_TYPE_DISTORTED_SPRITE &&
+            cmd.v0 == cmd.v3 && cmd.v1 == cmd.v2 && cmd.v0.y != cmd.v1.y;
 #if 1
-        if (isThinPolygonGeometric(cmd, s.scaleMax)) {
+        if (oneLineSprite || isThinPolygonGeometric(cmd, s.scaleMax)) {
             cmd.flags |= VDP1C_FLAG_THIN;
             // The shader's FLAG_THIN supercover band (forward
             // kForwardShaderSrc / vdp1_compute_forward.comp) extends

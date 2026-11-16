@@ -292,4 +292,15 @@
 
     </PreferenceCategory>
 
+    <PreferenceCategory
+        android:title="@string/setting_about"
+        android:icon="@drawable/ic_info_24">
+
+        <Preference
+            android:key="pref_third_party_notices"
+            android:title="@string/third_party_notices"
+            android:summary="@string/third_party_notices_summary" />
+
+    </PreferenceCategory>
+
 </PreferenceScreen>

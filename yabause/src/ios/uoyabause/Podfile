@@ -1,69 +1,56 @@
 # Uncomment the next line to define a global platform for your project
-platform :ios, '14.0'
+platform :ios, '15.0'
+
+# Firestore security patch for the compromised eMudhra intermediate CAs.
+# 12.19.3 is the lowest patched release on the 12.x line; do not go below it.
+# See https://firebase.google.com/support/guides/compromised-emudhra-intermediate-ca
+# The umbrella Firebase pod and its subspecs carry the 12.19.3 patch.
+FIREBASE_VERSION = ['~> 12.19', '>= 12.19.3']
+# 12.19.3 was a Firestore-only patch release: standalone pods such as
+# FirebaseCrashlytics stayed at 12.19.0, so they only get the minor pin.
+FIREBASE_COMPONENT_VERSION = ['~> 12.19']
+
+# Pods shared by the full and the Lite app.
+def shared_pods
+  pod 'Firebase/Core', *FIREBASE_VERSION
+  pod 'Firebase/Auth', *FIREBASE_VERSION
+  pod 'Firebase/Database', *FIREBASE_VERSION
+  pod 'Firebase/Storage', *FIREBASE_VERSION
+  pod 'Firebase/Firestore', *FIREBASE_VERSION
+  pod 'Firebase/Messaging', *FIREBASE_VERSION
+  pod 'Firebase/InAppMessaging', *FIREBASE_VERSION
+  pod 'Firebase/RemoteConfig', *FIREBASE_VERSION
+  pod 'GoogleSignIn'
+  pod 'FirebaseCrashlytics', *FIREBASE_COMPONENT_VERSION
+  pod 'Kingfisher', '~> 7.0'
+end
 
 target 'YabaSnashiro' do
   # Comment the next line if you're not using Swift and don't want to use dynamic frameworks
   use_frameworks!
-  pod 'Firebase/Core'
-  pod 'Firebase/Auth'
-  pod 'Firebase/Database'
-  pod 'Firebase/Storage'
-  pod 'Firebase/Firestore'
-  pod 'Firebase/Messaging'
-  pod 'Firebase/InAppMessaging'
-  pod 'Firebase/RemoteConfig'
-  pod 'GoogleSignIn'
-  pod 'FirebaseCrashlytics'
-  pod 'Kingfisher', '~> 7.0'
+  shared_pods
 
-  # Pods for uoyabause
-
-  target 'YabaSnashiro-Lite' do
-    inherit! :search_paths
-    pod 'Firebase/Core'
-    pod 'Firebase/Auth'
-    pod 'Firebase/Storage'
-    pod 'Firebase/Database'
-    pod 'Firebase/Firestore'
-    pod 'Firebase/Messaging'
-    pod 'Firebase/InAppMessaging'
-    pod 'Firebase/RemoteConfig'
-    pod 'GoogleSignIn'
-    pod 'FirebaseCrashlytics'
-    pod 'Kingfisher', '~> 7.0'
-    pod 'Google-Mobile-Ads-SDK'
-    end
-
+  # Test bundles are hosted by YabaSnashiro and must not relink its pods, so
+  # search-path inheritance is the right mode for them.
   target 'YabaSnashiroTests' do
     inherit! :search_paths
-    pod 'Firebase/Core'
-    pod 'Firebase/Auth'
-    pod 'Firebase/Storage'
-    pod 'Firebase/Database'
-    pod 'Firebase/Firestore'
-    pod 'Firebase/Messaging'
-    pod 'Firebase/InAppMessaging'
-    pod 'Firebase/RemoteConfig'
-    pod 'GoogleSignIn'
-    pod 'FirebaseCrashlytics'
-    pod 'Kingfisher', '~> 7.0'
   end
 
   target 'YabaSnashiroUITests' do
     inherit! :search_paths
-    pod 'Firebase/Core'
-    pod 'Firebase/Storage'
-    pod 'Firebase/Auth'
-    pod 'Firebase/Database'
-    pod 'Firebase/Firestore'
-    pod 'Firebase/Messaging'
-    pod 'Firebase/InAppMessaging'
-    pod 'Firebase/RemoteConfig'
-    pod 'GoogleSignIn'
-    pod 'FirebaseCrashlytics'
-    pod 'Kingfisher', '~> 7.0'
   end
+end
 
+# YabaSnashiro-Lite is a standalone app, not a bundle hosted by YabaSnashiro, so
+# it needs a top-level target that links its own pods. As a nested
+# `inherit! :search_paths` target CocoaPods skipped the statically vendored pods
+# (FirebaseAnalytics, GoogleAppMeasurement*, GoogleAdsOnDeviceConversion),
+# assuming a host app had already linked them, which left the APM symbols
+# undefined at link time.
+target 'YabaSnashiro-Lite' do
+  use_frameworks!
+  shared_pods
+  pod 'Google-Mobile-Ads-SDK'
 end
 
 post_install do |installer|

@@ -95,6 +95,10 @@
             android:name="org.uoyabause.android.SettingsActivity"
             android:label="@string/title_activity_yaba_snashiro_settings" />
         <activity android:name="org.uoyabause.android.AdActivity" />
+        <activity
+            android:name="org.uoyabause.android.auth.ui.PcSignInActivity"
+            android:exported="false"
+            android:theme="@style/AppTheme" />
 
         <meta-data
             android:name="com.google.android.gms.version"

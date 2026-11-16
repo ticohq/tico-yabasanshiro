@@ -10,6 +10,7 @@ import com.firebase.ui.auth.FirebaseAuthUIActivityResultContract
 import com.firebase.ui.auth.data.model.FirebaseAuthUIAuthenticationResult
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import org.uoyabause.android.auth.ui.PcSignInActivity
 
 /**
  * Firebase Authentication Manager
@@ -109,7 +110,7 @@ class FirebaseAuthManager(
                     "https://www.yabasanshiro.com/privacy",
                 ).build()
 
-        signInLauncher.launch(signInIntent)
+        signInLauncher.launch(PcSignInActivity.wrap(activity, signInIntent))
     }
 
     /**

@@ -57,6 +57,9 @@ public:
   void flushPipeLineCache(VkDevice device);
 
   void dicardAllPielines();
+  // Deletes the cached pipelines. The caller must make sure the GPU no
+  // longer uses them.
+  void deleteAllPipelines();
 
 protected:
 

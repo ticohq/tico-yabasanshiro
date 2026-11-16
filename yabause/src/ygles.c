@@ -22,11 +22,13 @@
 #include <stdlib.h>
 #include <math.h>
 #include "ygl.h"
+#include "vdp1texrow.h"
 #include "yui.h"
 #include "vidshared.h"
 #include "debug.h"
 #include "frameprofile.h"
 #include "ygl_fsr.h"
+#include "crt/crt_gl.h"
 
 #define NUM_TEXTURE_BUFFER 1
 
@@ -1628,7 +1630,9 @@ int YglInit(int width, int height, unsigned int depth)
     return -1;
   }
 
-  memset(_Ygl, 0, sizeof(Ygl));
+  memset(_Ygl,0,sizeof(Ygl));
+  // A new context: whatever the CRT mode built in an old one is gone.
+  YglCrtForget();
 
   _Ygl->depth = depth;
   _Ygl->rwidth = 320;
@@ -1806,6 +1810,7 @@ void YglDeInit(void)
   // ---- Phase 2: RBG compute shader resources ----
   RBGGenerator_deinit();
   YglFsrDeInit(); // FSR's programs and targets
+  YglCrtDeInit(); // the CRT filters' programs and targets
 
   // ---- Phase 3: Texture manager ----
   YglTMDeInit(YglTM);
@@ -2976,6 +2981,20 @@ int YglQuadGrowShading_tesselation_in(YglSprite *input, YglTexture *output, floa
       c->x = tmp[1].s;
       c->y = tmp[2].t;
       break;
+    }
+  }
+
+  if (input->texrow_dmax >= 0) {
+    /* Texture row stepping (vdp1texrow.h): t = atlas row of texture row 0,
+       r = line parameter (k0 on A-B, k1 on D-C), q = packed constants. The
+       fragment shader picks the row; s keeps the usual interpolation. Done
+       after the cache entry above so the cached origin is unchanged. */
+    const float packed = vdp1_tess_pack(input->texrow_dmax, input->h, (input->flip & 0x2) != 0);
+    int i;
+    for (i = 0; i < 4; i++) {
+      tmp[i].t = (float)y;
+      tmp[i].r = (i < 2) ? input->texrow_k0 : input->texrow_k1;
+      tmp[i].q = packed;
     }
   }
 
@@ -4503,6 +4522,30 @@ void YglSetClearColor(float r, float g, float b)
   _Ygl->clear_b = b;
 }
 
+// CRT filters: the frame was rendered at the Saturn's own resolution
+// (VIDOGLApplyEffectiveResolution) into fxaa_fbotex; the CRT shader scales it
+// into the whole window itself (4:3, whole pixels per scan line), so the
+// aspect-ratio viewport (originx, GlWidth) is not used; only its placement
+// rule is: the picture goes to the top where the normal output does
+// (output_top, full-screen portrait). The field of an
+// interlaced frame is the TVSTAT ODD bit of this frame's register snapshot.
+static int crt_fallback_pending = 0;
+static int YglPresentCrt(void) {
+  const int win_w = _Ygl->screen_width > 0 ? _Ygl->screen_width : GlWidth;
+  const int win_h = _Ygl->screen_height > 0 ? _Ygl->screen_height : GlHeight;
+  const int field = fixVdp2Regs ? ((fixVdp2Regs->TVSTAT >> 1) & 0x01) : 0;
+  if (YglCrtPresent(_Ygl->aamode, _Ygl->fxaa_fbotex, _Ygl->width, _Ygl->height, field,
+                    _Ygl->rotate_screen, _Ygl->default_fbo, 0, 0, win_w, win_h,
+                    _Ygl->output_top) == 0)
+    return 0;
+  // The shader cannot be used: this frame goes out through the normal blit
+  // (the frame is already rendered at scale 1), and from the next frame on
+  // the user's own resolution is back (YglRender calls
+  // VIDOGLApplyEffectiveResolution once the blit is done).
+  crt_fallback_pending = 1;
+  return -1;
+}
+
 void YglRender(void)
 {
   YglLevel *level;
@@ -4822,8 +4865,10 @@ void YglRender(void)
     glScissor(_Ygl->originx, _Ygl->originy, GlWidth, GlHeight);
     YglBlitScanlineFilter(_Ygl->fxaa_fbotex, GlHeight, _Ygl->rheight);
   }
-  else if (_Ygl->resolution_mode != RES_NATIVE)
-  {
+  else if (YGL_IS_CRT_MODE(_Ygl->aamode) && YglPresentCrt() == 0) {
+    // Drawn through the CRT shader at the Saturn's own resolution.
+  }
+  else if (_Ygl->resolution_mode != RES_NATIVE ) {
     glBindFramebuffer(GL_FRAMEBUFFER, _Ygl->default_fbo);
 
     glDisable(GL_SCISSOR_TEST);
@@ -4849,6 +4894,10 @@ void YglRender(void)
   }
   else
   {
+  }
+  if (crt_fallback_pending) {
+    crt_fallback_pending = 0;
+    VIDOGLApplyEffectiveResolution();
   }
 render_finish:
   glViewport(_Ygl->originx, _Ygl->originy, GlWidth, GlHeight);

@@ -61,6 +61,12 @@ internal abstract class PadManager {
 
     abstract fun getDeviceCount(): Int
 
+    /**
+     * When player 1 uses a keyboard, returns Saturn button (PadEvent.BUTTON_*)
+     * to key code for every bound button. Null when player 1 is not a keyboard.
+     */
+    open fun getPlayer1KeyboardMap(): Map<Int, Int>? = null
+
     interface ShowMenuListener {
         fun show()
     }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- Debug-only probe for Google Play Games on PC: sign-in, SAF and drag-and-drop. -->
+        <activity
+            android:name="org.uoyabause.android.PcProbeActivity"
+            android:exported="true"
+            android:theme="@style/AppTheme" />
+    </application>
+</manifest>

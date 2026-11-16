@@ -30,6 +30,19 @@ extern "C"
 }
 
 #include <math.h>
+#include "vdp2_rotbank.h"
+
+// The VRAM banks a rotation screen may read depend on the layer, not on the
+// rotation parameter: Vdp2ReadRotationTable() fills the RBG0 masks, and the
+// RBG1 draw (rgb_type 0x04, which uses parameter B) replaces them with the
+// fixed RBG1 banks. Both upload paths below go through here.
+static void rbgApplyLayerBankMasks(int rgb_type, vdp2rotationparameter_struct *a, vdp2rotationparameter_struct *b)
+{
+  if (rgb_type != 0x04) return;
+  Vdp2RotBankMasks(fixVdp2Regs->RAMCTL, fixVdp2Regs->BGON, 1, &a->nt_bank_mask, &a->cg_bank_mask);
+  b->nt_bank_mask = a->nt_bank_mask;
+  b->cg_bank_mask = a->cg_bank_mask;
+}
 
 #if defined(HAVE_VULKAN)
 #include "vulkan/VIDVulkan.h"
@@ -72,216 +85,276 @@ const char prg_generate_rbg_base[] =
 #else
     "#version 430 \n"
 #endif
-    "layout(local_size_x = %d, local_size_y = %d, local_size_z = 1) in;\n"
-    "layout(rgba8, binding = 0)  uniform writeonly image2D outSurface;\n"
-    "layout(std430, binding = 1) readonly buffer VDP2 { uint vram[]; };\n"
-    "struct vdp2rotationparameter_struct{ \n"
-    " uint PlaneAddrv[16];\n"
-    " float Xst;\n"
-    " float Yst;\n"
-    " float Zst;\n"
-    " float deltaXst;\n"
-    " float deltaYst;\n"
-    " float deltaX;\n"
-    " float deltaY;\n"
-    " float A;\n"
-    " float B;\n"
-    " float C;\n"
-    " float D;\n"
-    " float E;\n"
-    " float F;\n"
-    " float Px;\n"
-    " float Py;\n"
-    " float Pz;\n"
-    " float Cx;\n"
-    " float Cy;\n"
-    " float Cz;\n"
-    " float Mx;\n"
-    " float My;\n"
-    " float kx;\n"
-    " float ky;\n"
-    " float KAst;\n"
-    " float deltaKAst;\n"
-    " float deltaKAx;\n"
-    " uint coeftbladdr;\n"
-    " int coefenab;\n"
-    " int coefmode;\n"
-    " int coefdatasize;\n"
-    " int use_coef_for_linecolor;\n"
-    " float Xp;\n"
-    " float Yp;\n"
-    " float dX;\n"
-    " float dY;\n"
-    " int screenover;\n"
-    " int msb;\n"
-    " uint charaddr;\n"
-    " int planew, planew_bits, planeh, planeh_bits;\n"
-    " int MaxH, MaxV;\n"
-    " float Xsp;\n"
-    " float Ysp;\n"
-    " float dx;\n"
-    " float dy;\n"
-    " float lkx;\n"
-    " float lky;\n"
-    " int KtablV;\n"
-    " int ShiftPaneX;\n"
-    " int ShiftPaneY;\n"
-    " int MskH;\n"
-    " int MskV;\n"
-    " uint lineaddr;\n"
-    " int k_mem_type;\n"
-    " uint over_pattern_name;\n"
-    " int linecoefenab;\n"
-    "};\n"
-    "layout(std430, binding = 2) readonly buffer vdp2Param { \n"
-    "  vdp2rotationparameter_struct para[2];\n"
-    "};\n"
-    "layout(std140, binding = 3) uniform  RBGDrawInfo { \n"
-    "  float hres_scale; \n"
-    "  float vres_scale; \n"
-    "  int cellw_; \n"
-    "  int cellh_; \n"
-    "  uint paladdr_; \n"
-    "  int pagesize; \n"
-    "  int patternshift; \n"
-    "  int planew; \n"
-    "  int pagewh; \n"
-    "  int patterndatasize; \n"
-    "  uint supplementdata; \n"
-    "  int auxmode; \n"
-    "  int patternwh;\n"
-    "  uint coloroffset;\n"
-    "  int transparencyenable;\n"
-    "  int specialcolormode;\n"
-    "  int specialcolorfunction;\n"
-    "  uint specialcode;\n"
-    "  int colornumber;\n"
-    "  int window_area_mode;"
-    "  float alpha_;"
-    "  int cram_shift;"
-    "  int hires_shift;"
-    "  int specialprimode;"
-    "  uint priority;"
-    "};\n"
-    " struct vdp2WindowInfo\n"
-    "{\n"
-    "  int WinShowLine;\n"
-    "  int WinHStart;\n"
-    "  int WinHEnd;\n"
-    "};\n"
-    "layout(std430, binding = 4) readonly buffer windowinfo { \n"
-    "  vdp2WindowInfo pWinInfo[];\n"
-    "};\n"
-    "layout(std430, binding = 5) readonly buffer VDP2C { uint cram[]; };\n"
-    " int GetKValue( int paramid, float posx, float posy, out float ky, out uint lineaddr ){ \n"
-    "  uint kdata;\n"
-    "  int kindex = int( ceil(para[paramid].deltaKAst*posy+(para[paramid].deltaKAx*posx)) ); \n"
-    "  if (para[paramid].coefdatasize == 2) { \n"
-    "    uint addr = ( uint( int(para[paramid].coeftbladdr) + (kindex<<1)) &0x7FFFFu); "
-    "    if( para[paramid].k_mem_type == 0) { \n"
-    "	     kdata = vram[ addr>>2 ]; \n"
-    "      if( (addr & 0x02u) != 0u ) { kdata >>= 16; } \n"
-    "      kdata = (((kdata>>8)&0xFFu) | ((kdata << 8) & 0xFFFFFF00u))&0xFFFFu;\n"
-    "    }else{\n"
-    "      kdata = cram[ ((0x800u + (addr&0x7FFu))>>2)  ]; \n"
-    "      if( (addr & 0x02u) != 0u ) { kdata >>= 16; } \n"
-    "    }\n"
-    "    if ( (kdata & 0x8000u) != 0u) { return -1; }\n"
-    "	   if((kdata&0x4000u)!=0u) ky=float( int(kdata&0x7FFFu)| int(0xFFFF8000u) )/1024.0; else ky=float(kdata&0x7FFFu)/1024.0;\n"
-    "  }else{\n"
-    "    uint addr = ( uint( int(para[paramid].coeftbladdr) + (kindex<<2))&0x7FFFFu);"
-    "    if( para[paramid].k_mem_type == 0) { \n"
-    "	     kdata = vram[ addr>>2 ]; \n"
-    "      kdata = ((kdata&0xFF000000u) >> 24 | ((kdata >> 8) & 0x0000FF00u) | ((kdata<<8) & 0x00FF0000u) | (kdata&0x000000FFu) << 24);\n"
-    "    }else{\n"
-    "      kdata = cram[ ((0x800u + (addr&0x7FFu) )>>2) ]; \n"
-    "      kdata = ((kdata&0xFFFF0000u)>>16|(kdata&0x0000FFFFu)<<16);\n"
-    "    }\n"
-    "	 if( para[paramid].linecoefenab != 0) lineaddr = (kdata >> 24) & 0x7Fu; else lineaddr = 0u;\n"
-    "	 if((kdata&0x80000000u)!=0u){ return -1;}\n"
-    "	 if((kdata&0x00800000u)!=0u) ky=float( int(kdata&0x00FFFFFFu)| int(0xFF800000u) )/65536.0; else ky=float(kdata&0x00FFFFFFu)/65536.0;\n"
-    "  }\n"
-    "  return 0;"
-    " }\n"
+"layout(local_size_x = %d, local_size_y = %d, local_size_z = 1) in;\n"
+"layout(rgba8, binding = 0)  uniform writeonly image2D outSurface;\n"
+"layout(std430, binding = 1) readonly buffer VDP2 { uint vram[]; };\n"
+"struct vdp2rotationparameter_struct{ \n"
+" uint PlaneAddrv[16];\n"
+" float Xst;\n"
+" float Yst;\n"
+" float Zst;\n"
+" float deltaXst;\n"
+" float deltaYst;\n"
+" float deltaX;\n"
+" float deltaY;\n"
+" float A;\n"
+" float B;\n"
+" float C;\n"
+" float D;\n"
+" float E;\n"
+" float F;\n"
+" float Px;\n"
+" float Py;\n"
+" float Pz;\n"
+" float Cx;\n"
+" float Cy;\n"
+" float Cz;\n"
+" float Mx;\n"
+" float My;\n"
+" float kx;\n"
+" float ky;\n"
+" float KAst;\n"
+" float deltaKAst;\n"
+" float deltaKAx;\n"
+" uint coeftbladdr;\n"
+" int coefenab;\n"
+" int coefmode;\n"
+" int coefdatasize;\n"
+" int use_coef_for_linecolor;\n"
+" float Xp;\n"
+" float Yp;\n"
+" float dX;\n"
+" float dY;\n"
+" int screenover;\n"
+" int msb;\n"
+" uint charaddr;\n"
+" int planew, planew_bits, planeh, planeh_bits;\n"
+" int MaxH, MaxV;\n"
+" float Xsp;\n"
+" float Ysp;\n"
+" float dx;\n"
+" float dy;\n"
+" float lkx;\n"
+" float lky;\n"
+" int KtablV;\n"
+" int ShiftPaneX;\n"
+" int ShiftPaneY;\n"
+" int MskH;\n"
+" int MskV;\n"
+" uint lineaddr;\n"
+" int k_mem_type;\n"
+" uint over_pattern_name;\n"
+" int linecoefenab;\n"
+" uint nt_bank_mask;\n"
+" uint cg_bank_mask;\n"
+"};\n"
+"layout(std430, binding = 2) readonly buffer vdp2Param { \n"
+"  vdp2rotationparameter_struct para[2];\n"
+"};\n"
+"layout(std140, binding = 3) uniform  RBGDrawInfo { \n"
+"  float hres_scale; \n"
+"  float vres_scale; \n"
+"  int cellw_; \n"
+"  int cellh_; \n"
+"  uint paladdr_; \n"
+"  int pagesize; \n"
+"  int patternshift; \n"
+"  int planew; \n"
+"  int pagewh; \n"
+"  int patterndatasize; \n"
+"  uint supplementdata; \n"
+"  int auxmode; \n"
+"  int patternwh;\n"
+"  uint coloroffset;\n"
+"  int transparencyenable;\n"
+"  int specialcolormode;\n"
+"  int specialcolorfunction;\n"
+"  uint specialcode;\n"
+"  int colornumber;\n"
+"  int window_area_mode;"
+"  float alpha_;"
+"  int cram_shift;"
+"  int hires_shift;"
+"  int specialprimode;"
+"  uint priority;"
+"};\n"
+" struct vdp2WindowInfo\n"
+"{\n"
+"  int WinShowLine;\n"
+"  int WinHStart;\n"
+"  int WinHEnd;\n"
+"};\n"
+"layout(std430, binding = 4) readonly buffer windowinfo { \n"
+"  vdp2WindowInfo pWinInfo[];\n"
+"};\n"
+"layout(std430, binding = 5) readonly buffer VDP2C { uint cram[]; };\n"
+// The coefficient table entry of whole Saturn pixel (px, py). lineaddr is
+// written on every path (0 when the entry carries no line colour code).
+" int GetKValueAt( int paramid, int px, int py, out float ky, out uint lineaddr ){ \n"
+"  uint kdata;\n"
+"  lineaddr = 0u;\n"
+"  int kindex = int( ceil(para[paramid].deltaKAst*float(py)+(para[paramid].deltaKAx*float(px))) ); \n"
+"  if (para[paramid].coefdatasize == 2) { \n"
+"    uint addr = ( uint( int(para[paramid].coeftbladdr) + (kindex<<1)) &0x7FFFFu); "
+"    if( para[paramid].k_mem_type == 0) { \n"
+"	     kdata = vram[ addr>>2 ]; \n"
+"      if( (addr & 0x02u) != 0u ) { kdata >>= 16; } \n"
+"      kdata = (((kdata>>8)&0xFFu) | ((kdata << 8) & 0xFFFFFF00u))&0xFFFFu;\n"
+"    }else{\n"
+"      kdata = cram[ ((0x800u + (addr&0x7FFu))>>2)  ]; \n"
+"      if( (addr & 0x02u) != 0u ) { kdata >>= 16; } \n"
+"    }\n"
+"    if ( (kdata & 0x8000u) != 0u) { return -1; }\n"
+"	   if((kdata&0x4000u)!=0u) ky=float( int(kdata&0x7FFFu)| int(0xFFFF8000u) )/1024.0; else ky=float(kdata&0x7FFFu)/1024.0;\n"
+"  }else{\n"
+"    uint addr = ( uint( int(para[paramid].coeftbladdr) + (kindex<<2))&0x7FFFFu);"
+"    if( para[paramid].k_mem_type == 0) { \n"
+"	     kdata = vram[ addr>>2 ]; \n"
+"      kdata = ((kdata&0xFF000000u) >> 24 | ((kdata >> 8) & 0x0000FF00u) | ((kdata<<8) & 0x00FF0000u) | (kdata&0x000000FFu) << 24);\n"
+"    }else{\n"
+"      kdata = cram[ ((0x800u + (addr&0x7FFu) )>>2) ]; \n"
+"      kdata = ((kdata&0xFFFF0000u)>>16|(kdata&0x0000FFFFu)<<16);\n"
+"    }\n"
+"	 if( para[paramid].linecoefenab != 0) lineaddr = (kdata >> 24) & 0x7Fu; else lineaddr = 0u;\n"
+"	 if((kdata&0x80000000u)!=0u){ return -1;}\n"
+"	 if((kdata&0x00800000u)!=0u) ky=float( int(kdata&0x00FFFFFFu)| int(0xFF800000u) )/65536.0; else ky=float(kdata&0x00FFFFFFu)/65536.0;\n"
+"  }\n"
+"  return 0;"
+" }\n"
 
-    " bool isWindowInside(int posx, int posy) {\n"
-    " posy <<= hires_shift;"
-    "	if (window_area_mode == 0) {\n"
-    "		if (pWinInfo[posy].WinShowLine == 0) {\n"
-    "			return true;\n"
-    "		}\n"
-    "		else {\n"
-    "			if (posx < pWinInfo[posy].WinHStart || posx >= pWinInfo[posy].WinHEnd) {\n"
-    "				return true;\n"
-    "			}\n"
-    "			else {\n"
-    "				return false;\n"
-    "			}\n"
-    "		}\n"
-    "	}\n"
-    "	else {\n"
-    "		if (pWinInfo[posy].WinShowLine == 0) {\n"
-    "			return false;\n"
-    "		}\n"
-    "		else {\n"
-    "			if (posx < pWinInfo[posy].WinHStart || posx >= pWinInfo[posy].WinHEnd) {\n"
-    "				return false;\n"
-    "			}\n"
-    "			else {\n"
-    "				return true;\n"
-    "			}\n"
-    "		}\n"
-    "	}\n"
-    "	return true;\n"
-    "}\n"
+" bool isWindowInside(int posx, int posy) {\n"
+" posy <<= hires_shift;"
+"	if (window_area_mode == 0) {\n"
+"		if (pWinInfo[posy].WinShowLine == 0) {\n"
+"			return true;\n"
+"		}\n"
+"		else {\n"
+"			if (posx < pWinInfo[posy].WinHStart || posx >= pWinInfo[posy].WinHEnd) {\n"
+"				return true;\n"
+"			}\n"
+"			else {\n"
+"				return false;\n"
+"			}\n"
+"		}\n"
+"	}\n"
+"	else {\n"
+"		if (pWinInfo[posy].WinShowLine == 0) {\n"
+"			return false;\n"
+"		}\n"
+"		else {\n"
+"			if (posx < pWinInfo[posy].WinHStart || posx >= pWinInfo[posy].WinHEnd) {\n"
+"				return false;\n"
+"			}\n"
+"			else {\n"
+"				return true;\n"
+"			}\n"
+"		}\n"
+"	}\n"
+"	return true;\n"
+"}\n"
 
-    "uint get_cram_msb(uint colorindex) { \n"
-    "	uint colorval = 0u; \n"
-    "	colorindex = (colorindex << cram_shift) & 0xFFFu; \n"
-    "	colorval = cram[colorindex >> 2]; \n"
-    "	if ((colorindex & 0x02u) != 0u) { colorval >>= 16; } \n"
-    "	return (colorval & 0x8000u); \n"
-    "}\n"
+// The Saturn pixel that contains the dot sampled at (posx, posy). posx/posy
+// are corner based (texel * scale), so this is the floor; the small margin
+// keeps a scale such as 1/6 (texel * scale = 0.99999994) from picking the
+// previous pixel. At the original resolution the positions are integers and
+// the margin changes nothing.
+"ivec2 rbg_dot_pixel(float posx, float posy) { return ivec2(floor(vec2(posx, posy) + 1.0e-4)); }\n"
+// Rotation parameter mode 3: set by prg_get_param_mode03 before it reads the
+// coefficient, so GetKValue knows the window picks the parameter set per dot.
+"bool rbg_param_mode3 = false;\n"
+// Mode 3: the parameter set VDP2 draws whole pixel p with (the same window
+// test prg_get_param_mode03 uses), p clamped to the Saturn screen.
+"int rbg_param_at(ivec2 p) {\n"
+"  ivec2 lim = ivec2(vec2(imageSize(outSurface)) * vec2(hres_scale, vres_scale) + 0.5) - 1;\n"
+"  p = clamp(p, ivec2(0), max(lim, ivec2(0)));\n"
+"  return isWindowInside(p.x, p.y) ? 0 : 1;\n"
+"}\n"
+// The coefficient at Saturn position (posx, posy). VDP2 reads the table at
+// whole pixels only, so at the original resolution every dot takes exactly
+// the entry of its pixel. Above it, a sample between pixels interpolates the
+// four entries around it: as 1/k when they share a sign (1/k is linear along a
+// plane in perspective), linearly otherwise. It holds the entry of the pixel
+// that contains the dot when one of the four is transparent or, in mode 3,
+// drawn by the other parameter set. Transparency and the line colour code
+// always come from that pixel.
+" int GetKValue( int paramid, float posx, float posy, out float ky, out uint lineaddr ){ \n"
+"  if (hres_scale == 1.0 && vres_scale == 1.0) return GetKValueAt(paramid, int(posx), int(posy), ky, lineaddr);\n"
+"  vec2 s = vec2(posx, posy);\n"
+"  ivec2 i0 = rbg_dot_pixel(posx, posy);\n"
+"  vec2 f = clamp(s - vec2(i0), 0.0, 1.0);\n"
+"  ivec2 n = i0;\n"
+"  if (GetKValueAt(paramid, n.x, n.y, ky, lineaddr) == -1) return -1;\n"
+"  if (f.x == 0.0 && f.y == 0.0) return 0;\n"
+"  if (rbg_param_mode3 && (rbg_param_at(i0) != paramid || rbg_param_at(i0 + ivec2(1, 0)) != paramid ||\n"
+"      rbg_param_at(i0 + ivec2(0, 1)) != paramid || rbg_param_at(i0 + ivec2(1, 1)) != paramid)) return 0;\n"
+"  vec4 q; uint la;\n"
+"  if (GetKValueAt(paramid, i0.x, i0.y, q.x, la) == -1) return 0;\n"
+"  if (GetKValueAt(paramid, i0.x + 1, i0.y, q.y, la) == -1) return 0;\n"
+"  if (GetKValueAt(paramid, i0.x, i0.y + 1, q.z, la) == -1) return 0;\n"
+"  if (GetKValueAt(paramid, i0.x + 1, i0.y + 1, q.w, la) == -1) return 0;\n"
+"  if (all(greaterThan(q, vec4(0.0))) || all(lessThan(q, vec4(0.0)))) {\n"
+"    vec4 iq = 1.0 / q;\n"
+"    ky = 1.0 / mix(mix(iq.x, iq.y, f.x), mix(iq.z, iq.w, f.x), f.y);\n"
+"  } else {\n"
+"    ky = mix(mix(q.x, q.y, f.x), mix(q.z, q.w, f.x), f.y);\n"
+"  }\n"
+"  return 0;\n"
+" }\n"
 
-    "int PixelIsSpecialPriority( uint specialcode, uint dot ) { \n"
-    "  dot &= 0xfu; \n"
-    "  if ( (specialcode & 0x01u) != 0u && (dot == 0u || dot == 1u) ){ return 1;} \n"
-    "  if ( (specialcode & 0x02u) != 0u && (dot == 2u || dot == 3u) ){ return 1;} \n"
-    "  if ( (specialcode & 0x04u) != 0u && (dot == 4u || dot == 5u) ){ return 1;} \n"
-    "  if ( (specialcode & 0x08u) != 0u && (dot == 6u || dot == 7u) ){ return 1;} \n"
-    "  if ( (specialcode & 0x10u) != 0u && (dot == 8u || dot == 9u) ){ return 1;} \n"
-    "  if ( (specialcode & 0x20u) != 0u && (dot == 0xau || dot == 0xbu) ){ return 1;} \n"
-    "  if ( (specialcode & 0x40u) != 0u && (dot == 0xcu || dot == 0xdu) ){ return 1;} \n"
-    "  if ( (specialcode & 0x80u) != 0u && (dot == 0xeu || dot == 0xfu) ){ return 1;} \n"
-    "  return 0; \n"
-    "} \n"
+// RAMCTL RDBS bank access rule (see vdp2_rotbank.h): a rotation screen reads
+// pattern names / character data only from the banks assigned to it; a read
+// from any other bank returns 0.
+"bool rbg_nt_bank_ok(int paramid, uint a) { return ((para[paramid].nt_bank_mask >> ((a >> 17) & 3u)) & 1u) != 0u; }\n"
+"bool rbg_cg_bank_ok(int paramid, uint a) { return ((para[paramid].cg_bank_mask >> ((a >> 17) & 3u)) & 1u) != 0u; }\n"
 
-    //----------------------------------------------------------------------
-    // Main
-    //----------------------------------------------------------------------
-    "void main(){ \n"
-    "  int x, y;\n"
-    "  int paramid = 0;\n"
-    "  int cellw;\n"
-    "  uint paladdr; \n"
-    "  uint charaddr; \n"
-    "  uint lineaddr = 0u; \n"
-    "  float ky; \n"
-    "  uint kdata;\n"
-    "  uint patternname = 0xFFFFFFFFu;\n"
-    "  uint specialfunction_in = 0u;\n"
-    "  uint specialcolorfunction_in = 0u;\n"
-    "  ivec2 texel = ivec2(gl_GlobalInvocationID.xy);\n"
-    "  ivec2 size = imageSize(outSurface);\n"
-    "  uint flipfunction = 0u;\n"
-    "  uint addr = 0u;\n"
-    "  if (texel.x >= size.x || texel.y >= size.y ) return;\n"
-    "  float posx = float(texel.x) * hres_scale;\n"
-    "  float posy = float(texel.y) * vres_scale;\n"
-    "  specialfunction_in = (supplementdata >> 9) & 0x1u; \n"
-    "  specialcolorfunction_in = (supplementdata >> 8) & 0x1u; \n";
+"uint get_cram_msb(uint colorindex) { \n"
+"	uint colorval = 0u; \n"
+"	colorindex = (colorindex << cram_shift) & 0xFFFu; \n"
+"	colorval = cram[colorindex >> 2]; \n"
+"	if ((colorindex & 0x02u) != 0u) { colorval >>= 16; } \n"
+"	return (colorval & 0x8000u); \n"
+"}\n"
 
-char prg_generate_rbg[sizeof(prg_generate_rbg_base) + 64] = {};
+
+"int PixelIsSpecialPriority( uint specialcode, uint dot ) { \n"
+"  dot &= 0xfu; \n"
+"  if ( (specialcode & 0x01u) != 0u && (dot == 0u || dot == 1u) ){ return 1;} \n"
+"  if ( (specialcode & 0x02u) != 0u && (dot == 2u || dot == 3u) ){ return 1;} \n"
+"  if ( (specialcode & 0x04u) != 0u && (dot == 4u || dot == 5u) ){ return 1;} \n"
+"  if ( (specialcode & 0x08u) != 0u && (dot == 6u || dot == 7u) ){ return 1;} \n"
+"  if ( (specialcode & 0x10u) != 0u && (dot == 8u || dot == 9u) ){ return 1;} \n"
+"  if ( (specialcode & 0x20u) != 0u && (dot == 0xau || dot == 0xbu) ){ return 1;} \n"
+"  if ( (specialcode & 0x40u) != 0u && (dot == 0xcu || dot == 0xdu) ){ return 1;} \n"
+"  if ( (specialcode & 0x80u) != 0u && (dot == 0xeu || dot == 0xfu) ){ return 1;} \n"
+"  return 0; \n"
+"} \n"
+
+//----------------------------------------------------------------------
+// Main
+//----------------------------------------------------------------------
+"void main(){ \n"
+"  int x, y;\n"
+"  int paramid = 0;\n"
+"  int cellw;\n"
+"  uint paladdr; \n"
+"  uint charaddr; \n"
+"  uint lineaddr = 0u; \n"
+"  float ky; \n"
+"  uint kdata;\n"
+"  uint patternname = 0xFFFFFFFFu;\n"
+"  uint specialfunction_in = 0u;\n"
+"  uint specialcolorfunction_in = 0u;\n"
+"  ivec2 texel = ivec2(gl_GlobalInvocationID.xy);\n"
+"  ivec2 size = imageSize(outSurface);\n"
+"  uint flipfunction = 0u;\n"
+"  uint addr = 0u;\n"
+"  if (texel.x >= size.x || texel.y >= size.y ) return;\n"
+"  float posx = float(texel.x) * hres_scale;\n"
+"  float posy = float(texel.y) * vres_scale;\n"
+"  specialfunction_in = (supplementdata >> 9) & 0x1u; \n"
+"  specialcolorfunction_in = (supplementdata >> 8) & 0x1u; \n";
+
+char prg_generate_rbg[ sizeof(prg_generate_rbg_base) + 64 ] = {};
 
 const char prg_rbg_rpmd0_2w[] =
     "  paramid = 0; \n"
@@ -299,20 +372,24 @@ const char prg_rbg_rpmd1_2w[] =
     "   if( GetKValue(paramid,posx,posy,ky,lineaddr ) == -1 ) { imageStore(outSurface,texel,vec4(0.0)); return;} \n"
     "  }\n";
 
+// RPMD=2: the coefficient line colour code always comes from parameter A's
+// coefficient (gated by A's KLCE), even when the dot switches to parameter B.
+// B's coefficient is read into a scratch variable so lineaddr stays A's.
 const char prg_rbg_rpmd2_2w[] =
-    "  paramid = 0; \n"
-    "  ky = para[paramid].ky; \n"
-    "  lineaddr = para[paramid].lineaddr; \n"
-    "  if( para[paramid].coefenab != 0 ){ \n"
-    "    if( GetKValue(paramid,posx,posy,ky,lineaddr ) == -1 ) { \n"
-    "      paramid=1;\n"
-    "      if( para[paramid].coefenab != 0 ){ \n"
-    "        if( GetKValue(paramid,posx,posy,ky,lineaddr ) == -1 ) { imageStore(outSurface,texel,vec4(0.0)); return;} \n"
-    "      }else{ \n"
-    "        ky = para[paramid].ky; \n"
-    "      }\n"
-    "    }\n"
-    "  }\n";
+"  paramid = 0; \n"
+"  ky = para[paramid].ky; \n"
+"  lineaddr = para[paramid].lineaddr; \n"
+"  if( para[paramid].coefenab != 0 ){ \n"
+"    if( GetKValue(paramid,posx,posy,ky,lineaddr ) == -1 ) { \n"
+"      paramid=1;\n"
+"      uint lineaddr_b = 0u; \n"
+"      if( para[paramid].coefenab != 0 ){ \n"
+"        if( GetKValue(paramid,posx,posy,ky,lineaddr_b ) == -1 ) { imageStore(outSurface,texel,vec4(0.0)); return;} \n"
+"      }else{ \n"
+"        ky = para[paramid].ky; \n"
+"      }\n"
+"    }\n"
+"  }\n";
 
 
 // Rotation parameter mode 3 chooses between A and B with the rotation
@@ -324,7 +401,8 @@ const char prg_rbg_rpmd2_2w[] =
 // plane, which made mode 3 render exactly like mode 0 - the switch was
 // invisible. vidsoft has always done it this way.
 const char prg_get_param_mode03[] =
-"  paramid = isWindowInside( int(posx), int(posy)) ? 0 : 1; \n"
+"  rbg_param_mode3 = true; \n"
+"  paramid = rbg_param_at(rbg_dot_pixel(posx, posy)); \n"
 "  ky = para[paramid].ky; \n"
 "  lineaddr = para[paramid].lineaddr; \n"
     "        if( para[paramid].coefenab != 0 ){ \n"
@@ -412,54 +490,56 @@ const char prg_rbg_get_patternaddr[] =
     "  addr &= 0x7FFFFu;\n";
 
 const char prg_rbg_get_pattern_data_1w[] =
-    "  if( patternname == 0xFFFFFFFFu){\n"
-    "    patternname = vram[addr>>2]; \n" // WORD mode( patterndatasize == 1 )
-    "    if( (addr & 0x02u) != 0u ) { patternname >>= 16; } \n"
-    "    patternname = (((patternname>>8)&0xFFu) | ((patternname << 8) & 0xFFFFFF00u)) & 0xFFFFu;\n"
-    "  }\n"
-    "  if(colornumber==0) paladdr = ((patternname & 0xF000u) >> 12) | ((supplementdata & 0xE0u) >> 1); else paladdr = (patternname & 0x7000u) >> 8;\n" // not in 16 colors
-    "  switch (auxmode)\n"
-    "  {\n"
-    "  case 0: \n"
-    "    flipfunction = (patternname & 0xC00u) >> 10;\n"
-    "    switch (patternwh)\n"
-    "    {\n"
-    "    case 1:\n"
-    "      charaddr = (patternname & 0x3FFu) | ((supplementdata & 0x1Fu) << 10);\n"
-    "      break;\n"
-    "    case 2:\n"
-    "      charaddr = ((patternname & 0x3FFu) << 2) | (supplementdata & 0x3u) | ((supplementdata & 0x1Cu) << 10);\n"
-    "      break;\n"
-    "    }\n"
-    "    break;\n"
-    "  case 1:\n"
-    "    flipfunction = 0u;\n"
-    "    switch (patternwh)\n"
-    "    {\n"
-    "    case 1:\n"
-    "      charaddr = (patternname & 0xFFFu) | ((supplementdata & 0x1Cu) << 10);\n"
-    "      break;\n"
-    "    case 2:\n"
-    "      charaddr = ((patternname & 0xFFFu) << 2) | (supplementdata & 0x3u) | ((supplementdata & 0x10u) << 10);\n"
-    "      break;\n"
-    "    }\n"
-    "    break;\n"
-    "  }\n"
-    "  charaddr &= 0x3FFFu;\n"
-    "  charaddr *= 0x20u;\n";
+"  if( patternname == 0xFFFFFFFFu){\n"
+"    patternname = vram[addr>>2]; \n" // WORD mode( patterndatasize == 1 )
+"    if( !rbg_nt_bank_ok(paramid, addr) ) patternname = 0u; \n"
+"    if( (addr & 0x02u) != 0u ) { patternname >>= 16; } \n"
+"    patternname = (((patternname>>8)&0xFFu) | ((patternname << 8) & 0xFFFFFF00u)) & 0xFFFFu;\n"
+"  }\n"
+"  if(colornumber==0) paladdr = ((patternname & 0xF000u) >> 12) | ((supplementdata & 0xE0u) >> 1); else paladdr = (patternname & 0x7000u) >> 8;\n" // not in 16 colors
+"  switch (auxmode)\n"
+"  {\n"
+"  case 0: \n"
+"    flipfunction = (patternname & 0xC00u) >> 10;\n"
+"    switch (patternwh)\n"
+"    {\n"
+"    case 1:\n"
+"      charaddr = (patternname & 0x3FFu) | ((supplementdata & 0x1Fu) << 10);\n"
+"      break;\n"
+"    case 2:\n"
+"      charaddr = ((patternname & 0x3FFu) << 2) | (supplementdata & 0x3u) | ((supplementdata & 0x1Cu) << 10);\n"
+"      break;\n"
+"    }\n"
+"    break;\n"
+"  case 1:\n"
+"    flipfunction = 0u;\n"
+"    switch (patternwh)\n"
+"    {\n"
+"    case 1:\n"
+"      charaddr = (patternname & 0xFFFu) | ((supplementdata & 0x1Cu) << 10);\n"
+"      break;\n"
+"    case 2:\n"
+"      charaddr = ((patternname & 0xFFFu) << 2) | (supplementdata & 0x3u) | ((supplementdata & 0x10u) << 10);\n"
+"      break;\n"
+"    }\n"
+"    break;\n"
+"  }\n"
+"  charaddr &= 0x3FFFu;\n"
+"  charaddr *= 0x20u;\n";
 
 const char prg_rbg_get_pattern_data_2w[] =
-    "  patternname = vram[addr>>2]; \n"
-    "  uint tmp1 = patternname & 0x7FFFu; \n"
-    "  charaddr = patternname >> 16; \n"
-    "  charaddr = (((charaddr>>8)&0xFFu) | ((charaddr << 8) & 0xFFFFFF00u)) & 0xFFFFu;\n"
-    "  tmp1 = ((tmp1>>8)&0xFFu) | ((tmp1 << 8) & 0xFFFFFF00u);\n"
-    "  flipfunction = (tmp1 & 0xC000u) >> 14;\n"
-    "  if(colornumber==0) paladdr = tmp1 & 0x7Fu; else paladdr = tmp1 & 0x70u;\n" // not in 16 colors
-    "  specialfunction_in = (tmp1 & 0x2000u) >> 13;\n"
-    "  specialcolorfunction_in = (tmp1 & 0x1000u) >> 12;\n"
-    "  charaddr &= 0x3FFFu;\n"
-    "  charaddr *= 0x20u;\n";
+"  patternname = vram[addr>>2]; \n"
+"  if( !rbg_nt_bank_ok(paramid, addr) ) patternname = 0u; \n"
+"  uint tmp1 = patternname & 0x7FFFu; \n"
+"  charaddr = patternname >> 16; \n"
+"  charaddr = (((charaddr>>8)&0xFFu) | ((charaddr << 8) & 0xFFFFFF00u)) & 0xFFFFu;\n"
+"  tmp1 = ((tmp1>>8)&0xFFu) | ((tmp1 << 8) & 0xFFFFFF00u);\n"
+"  flipfunction = (tmp1 & 0xC000u) >> 14;\n"
+"  if(colornumber==0) paladdr = tmp1 & 0x7Fu; else paladdr = tmp1 & 0x70u;\n" // not in 16 colors
+"  specialfunction_in = (tmp1 & 0x2000u) >> 13;\n"
+"  specialcolorfunction_in = (tmp1 & 0x1000u) >> 12;\n"
+"  charaddr &= 0x3FFFu;\n"
+"  charaddr *= 0x20u;\n";
 
 const char prg_rbg_get_charaddr[] =
     "  cellw = 8; \n"
@@ -500,29 +580,30 @@ const char prg_rbg_get_charaddr[] =
 
 // 4 BPP
 const char prg_rbg_getcolor_4bpp[] =
-    "  uint dot = 0u;\n"
-    "  uint cramindex = 0u;\n"
-    "  float alpha = alpha_;\n"
-    "  uint dotaddr = ((charaddr + uint(((y * cellw) + x) >> 1)) & 0x7FFFFu);\n"
-    "  dot = vram[ dotaddr >> 2];\n"
-    "  if( (dotaddr & 0x3u) == 0u ) dot >>= 0;\n"
-    "  else if( (dotaddr & 0x3u) == 1u ) dot >>= 8;\n"
-    "  else if( (dotaddr & 0x3u) == 2u ) dot >>= 16;\n"
-    "  else if( (dotaddr & 0x3u) == 3u ) dot >>= 24;\n"
-    "  if ( (x & 0x1) == 0 ) dot >>= 4;\n"
-    "  if ( (dot & 0xFu) == 0u && transparencyenable != 0 ) { \n"
-    "    cramindex = 0u; \n"
-    "    alpha = 0.0;\n"
-    "  } else {\n"
-    "    cramindex = (coloroffset + ((paladdr << 4) | (dot & 0xFu)));\n"
-    "    if (specialprimode == 2) { \n"
-    "      uint spriority = priority & 0xEu; \n"
-    "      if ( (specialfunction_in & 0x01u) != 0u ) { \n"
-    "        if( PixelIsSpecialPriority(specialcode, dot ) == 1 ){ \n"
-    "          spriority |= 0x1u; \n"
-    "        }\n"
-    "      }\n"
-    "      cramindex |= spriority << 16; \n"
+"  uint dot = 0u;\n"
+"  uint cramindex = 0u;\n"
+"  float alpha = alpha_;\n"
+"  uint dotaddr = ((charaddr + uint(((y * cellw) + x) >> 1)) & 0x7FFFFu);\n"
+"  dot = vram[ dotaddr >> 2];\n"
+"  if( !rbg_cg_bank_ok(paramid, dotaddr) ) dot = 0u;\n"
+"  if( (dotaddr & 0x3u) == 0u ) dot >>= 0;\n"
+"  else if( (dotaddr & 0x3u) == 1u ) dot >>= 8;\n"
+"  else if( (dotaddr & 0x3u) == 2u ) dot >>= 16;\n"
+"  else if( (dotaddr & 0x3u) == 3u ) dot >>= 24;\n"
+"  if ( (x & 0x1) == 0 ) dot >>= 4;\n"
+"  if ( (dot & 0xFu) == 0u && transparencyenable != 0 ) { \n"
+"    cramindex = 0u; \n"
+"    alpha = 0.0;\n"
+"  } else {\n"
+"    cramindex = (coloroffset + ((paladdr << 4) | (dot & 0xFu)));\n"
+"    if (specialprimode == 2) { \n"
+"      uint spriority = priority & 0xEu; \n"
+"      if ( (specialfunction_in & 0x01u) != 0u ) { \n"
+"        if( PixelIsSpecialPriority(specialcode, dot ) == 1 ){ \n"
+"          spriority |= 0x1u; \n"
+"        }\n"
+"      }\n"
+"      cramindex |= spriority << 16; \n"
 // SFPRMD mode 1 (per-character special priority): the priority LSB is the
 // character's special function bit, constant across the character's texels.
 // Bake it into cramindex bits 16-18 (-> texture B channel) exactly like the
@@ -550,29 +631,30 @@ const char prg_rbg_getcolor_4bpp[] =
 
 // 8BPP
 const char prg_rbg_getcolor_8bpp[] =
-    "  uint dot = 0u;\n"
-    "  uint cramindex = 0u;\n"
-    "  float alpha = alpha_;\n"
-    "  uint dotaddr = charaddr + uint((y*cellw)+x);\n"
-    "  dot = vram[ dotaddr >> 2];\n"
-    "  if( (dotaddr & 0x3u) == 0u ) dot >>= 0;\n"
-    "  else if( (dotaddr & 0x3u) == 1u ) dot >>= 8;\n"
-    "  else if( (dotaddr & 0x3u) == 2u ) dot >>= 16;\n"
-    "  else if( (dotaddr & 0x3u) == 3u ) dot >>= 24;\n"
-    "  dot = dot & 0xFFu; \n"
-    "  if ( dot == 0u && transparencyenable != 0 ) { \n"
-    "    cramindex = 0u; \n"
-    "    alpha = 0.0;\n"
-    "  } else {\n"
-    "    cramindex = (coloroffset + ((paladdr << 4) | dot));\n"
-    "    if (specialprimode == 2) { \n"
-    "      uint spriority = priority & 0xEu; \n"
-    "      if ( (specialfunction_in & 0x01u) != 0u) { \n"
-    "        if( PixelIsSpecialPriority(specialcode, dot ) == 1 ){ \n"
-    "          spriority |= 0x1u; \n"
-    "        }\n"
-    "      }\n"
-    "      cramindex |= spriority << 16; \n"
+"  uint dot = 0u;\n"
+"  uint cramindex = 0u;\n"
+"  float alpha = alpha_;\n"
+"  uint dotaddr = charaddr + uint((y*cellw)+x);\n"
+"  dot = vram[ dotaddr >> 2];\n"
+"  if( !rbg_cg_bank_ok(paramid, dotaddr) ) dot = 0u;\n"
+"  if( (dotaddr & 0x3u) == 0u ) dot >>= 0;\n"
+"  else if( (dotaddr & 0x3u) == 1u ) dot >>= 8;\n"
+"  else if( (dotaddr & 0x3u) == 2u ) dot >>= 16;\n"
+"  else if( (dotaddr & 0x3u) == 3u ) dot >>= 24;\n"
+"  dot = dot & 0xFFu; \n"
+"  if ( dot == 0u && transparencyenable != 0 ) { \n"
+"    cramindex = 0u; \n"
+"    alpha = 0.0;\n"
+"  } else {\n"
+"    cramindex = (coloroffset + ((paladdr << 4) | dot));\n"
+"    if (specialprimode == 2) { \n"
+"      uint spriority = priority & 0xEu; \n"
+"      if ( (specialfunction_in & 0x01u) != 0u) { \n"
+"        if( PixelIsSpecialPriority(specialcode, dot ) == 1 ){ \n"
+"          spriority |= 0x1u; \n"
+"        }\n"
+"      }\n"
+"      cramindex |= spriority << 16; \n"
 // SFPRMD mode 1: bake the per-character priority into B, mirroring the CPU
 // decoder (setSpecialPriority). See the 4bpp variant above for details.
 "    } else if (specialprimode == 1) { \n"
@@ -594,50 +676,55 @@ const char prg_rbg_getcolor_8bpp[] =
     "  }\n";
 
 const char prg_rbg_getcolor_16bpp_palette[] =
-    "  uint dot = 0u;\n"
-    "  uint cramindex = 0u;\n"
-    "  float alpha = alpha_;\n"
-    "  uint dotaddr = charaddr + uint((y*cellw)+x) * 2u;\n"
-    "  dot = vram[dotaddr>>2]; \n"
-    "  if( (dotaddr & 0x02u) != 0u ) { dot >>= 16; } \n"
-    "  dot = (((dot>>8)&0xFFu) | ((dot << 8) & 0xFFFFFF00u))&0xFFFFu;\n"
-    "  //dot = (((dot) >> 8 & 0xFF) | ((dot) & 0xFF) << 8);\n"
-    "  if ( dot == 0 && transparencyenable != 0 ) { \n"
-    "    cramindex = 0u; \n"
-    "    alpha = 0.0;\n"
-    "  } else {\n"
-    "    cramindex = (coloroffset + dot);\n"
-    "  }\n";
+"  uint dot = 0u;\n"
+"  uint cramindex = 0u;\n"
+"  float alpha = alpha_;\n"
+"  uint dotaddr = charaddr + uint((y*cellw)+x) * 2u;\n"
+"  dot = vram[dotaddr>>2]; \n"
+"  if( !rbg_cg_bank_ok(paramid, dotaddr) ) dot = 0u;\n"
+"  if( (dotaddr & 0x02u) != 0u ) { dot >>= 16; } \n"
+"  dot = (((dot>>8)&0xFFu) | ((dot << 8) & 0xFFFFFF00u))&0xFFFFu;\n"
+"  //dot = (((dot) >> 8 & 0xFF) | ((dot) & 0xFF) << 8);\n"
+"  if ( dot == 0 && transparencyenable != 0 ) { \n"
+"    cramindex = 0u; \n"
+"    alpha = 0.0;\n"
+"  } else {\n"
+"    cramindex = (coloroffset + dot);\n"
+"  }\n";
 
 const char prg_rbg_getcolor_16bpp_rbg[] =
-    "  uint dot = 0u;\n"
-    "  uint cramindex = 0u;\n"
-    "  float alpha = alpha_;\n"
-    "  uint dotaddr = charaddr + uint((y*cellw)+x) * 2u;\n"
-    "  dot = vram[dotaddr>>2]; \n"
-    "  if( (dotaddr & 0x02u) != 0u ) { dot >>= 16; } \n"
-    "  dot = (((dot>>8)&0xFFu) | ((dot << 8) & 0xFFFFFF00u))&0xFFFFu;\n"
-    "  //dot = (((dot >> 8) & 0xFFu) | ((dot) & 0xFFu) << 8);\n"
-    "  if ( (dot&0x8000u) == 0u && transparencyenable != 0 ) { \n"
-    "    cramindex = 0u; \n"
-    "    alpha = 0.0;\n"
-    "  } else {\n"
-    "    cramindex = (dot & 0x1Fu) << 3 | (dot & 0x3E0u) << 6 | (dot & 0x7C00u) << 9;\n"
-    "  }\n";
+"  uint dot = 0u;\n"
+"  uint cramindex = 0u;\n"
+"  float alpha = alpha_;\n"
+"  uint dotaddr = charaddr + uint((y*cellw)+x) * 2u;\n"
+"  dot = vram[dotaddr>>2]; \n"
+"  if( !rbg_cg_bank_ok(paramid, dotaddr) ) dot = 0u;\n"
+"  if( (dotaddr & 0x02u) != 0u ) { dot >>= 16; } \n"
+"  dot = (((dot>>8)&0xFFu) | ((dot << 8) & 0xFFFFFF00u))&0xFFFFu;\n"
+"  //dot = (((dot >> 8) & 0xFFu) | ((dot) & 0xFFu) << 8);\n"
+"  if ( (dot&0x8000u) == 0u && transparencyenable != 0 ) { \n"
+"    cramindex = 0u; \n"
+"    alpha = 0.0;\n"
+"  } else {\n"
+"    cramindex = (dot & 0x1Fu) << 3 | (dot & 0x3E0u) << 6 | (dot & 0x7C00u) << 9;\n"
+"  }\n";
+
 
 const char prg_rbg_getcolor_32bpp_rbg[] =
-    "  uint dot = 0u;\n"
-    "  uint cramindex = 0u;\n"
-    "  float alpha = alpha_;\n"
-    "  uint dotaddr = charaddr + uint((y*cellw)+x) * 4u;\n"
-    "  dot = vram[dotaddr>>2]; \n"
-    "  dot = ((dot&0xFF000000u) >> 24 | ((dot >> 8) & 0x0000FF00u) | ((dot<<8) & 0x00FF0000u) | (dot&0x000000FFu) << 24);\n"
-    "  if ( (dot&0x80000000u) == 0u && transparencyenable != 0 ) { \n"
-    "    cramindex = 0u; \n"
-    "    alpha = 0.0;\n"
-    "  } else {\n"
-    "    cramindex = dot & 0x00FFFFFFu;\n"
-    "  }\n";
+"  uint dot = 0u;\n"
+"  uint cramindex = 0u;\n"
+"  float alpha = alpha_;\n"
+"  uint dotaddr = charaddr + uint((y*cellw)+x) * 4u;\n"
+"  dot = vram[dotaddr>>2]; \n"
+"  if( !rbg_cg_bank_ok(paramid, dotaddr) ) dot = 0u;\n"
+"  dot = ((dot&0xFF000000u) >> 24 | ((dot >> 8) & 0x0000FF00u) | ((dot<<8) & 0x00FF0000u) | (dot&0x000000FFu) << 24);\n"
+"  if ( (dot&0x80000000u) == 0u && transparencyenable != 0 ) { \n"
+"    cramindex = 0u; \n"
+"    alpha = 0.0;\n"
+"  } else {\n"
+"    cramindex = dot & 0x00FFFFFFu;\n"
+"  }\n";
+
 
 const char prg_generate_rbg_end[] =
     "  imageStore(outSurface,texel,vec4( float(cramindex&0xFFu)/255.0, float((cramindex>>8) &0xFFu)/255.0, float((cramindex>>16) &0xFFu)/255.0, alpha));\n"
@@ -1337,9 +1424,9 @@ public:
     if (ssbo_vram_ != 0)
       return; // always inisialized!
 
-    // SSBOまわり
-    GLint maxSSBOBindings = 0;                    // 全ステージ合計のバインドポイント
-    GLint maxCompSSBO     = 0;                    // Computeステージで使えるSSBO数
+    // SSBO limits
+    GLint maxSSBOBindings = 0;                    // binding points summed over all stages
+    GLint maxCompSSBO     = 0;                    // SSBOs usable by the compute stage
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &maxSSBOBindings);
     glGetIntegerv(GL_MAX_COMPUTE_SHADER_STORAGE_BLOCKS,   &maxCompSSBO);
 
@@ -3039,9 +3126,12 @@ public:
     //}
 
     CS_DEBUG_LOG("[CS] Binding paraA/paraB buffer");
+    vdp2rotationparameter_struct upA = paraA;
+    vdp2rotationparameter_struct upB = paraB;
+    rbgApplyLayerBankMasks(rbg->rgb_type, &upA, &upB);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_paraA_);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vdp2rotationparameter_struct), (void *)&paraA);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, sizeof(vdp2rotationparameter_struct), sizeof(vdp2rotationparameter_struct), (void *)&paraB);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vdp2rotationparameter_struct), (void*)&upA);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, sizeof(vdp2rotationparameter_struct), sizeof(vdp2rotationparameter_struct), (void*)&upB);
     ErrorHandle("glBufferSubData");
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssbo_paraA_);
     ErrorHandle("glBindBufferBase 2 (paraA)");
@@ -3259,10 +3349,8 @@ RBGGeneratorVulkan::~RBGGeneratorVulkan()
       device.destroySampler(sampler);
 
     // Destroy command resources
-    if (commandPool)
-    {
-      if (command[0])
-      { // 少なくとも1つのコマンドバッファが割り当てられている場合
+    if (commandPool) {
+      if (command[0]) {  // at least one command buffer was allocated
         device.freeCommandBuffers(commandPool, MAX_RBG_RENDER, command);
       }
       device.destroyCommandPool(commandPool);
@@ -3933,17 +4021,17 @@ vk::Pipeline RBGGeneratorVulkan::compile_color_dot(
   std::string hashval = std::to_string(hash_value);
   string file_path = mempath + hashval + ".spv";
 
-  // バイナリファイルを読み込む
+  // read the binary file
   std::ifstream file(file_path, std::ios::binary);
   if (file)
   {
 
-    // ファイルサイズを取得する
+    // get the file size
     file.seekg(0, std::ios::end);
     std::size_t file_size = file.tellg();
     file.seekg(0, std::ios::beg);
 
-    // ファイルの内容を読み込む
+    // read the file contents
     data.resize(file_size / sizeof(uint32_t));
     file.read(reinterpret_cast<char *>(data.data()), file_size);
     file.close();
@@ -3977,10 +4065,10 @@ vk::Pipeline RBGGeneratorVulkan::compile_color_dot(
       throw std::runtime_error("failed to create shader module!");
     }
 
-    // データを書き込む
-    file.write(reinterpret_cast<char *>(data.data()), data.size() * sizeof(uint32_t));
+    // write the data
+    file.write(reinterpret_cast<char*>(data.data()), data.size() * sizeof(uint32_t));
 
-    // ファイルを閉じる
+    // close the file
     file.close();
   }
   // #endif
@@ -5492,9 +5580,12 @@ void RBGGeneratorVulkan::update(VIDVulkan::RBGDrawInfo *rbg, const vdp2rotationp
   }
 
   int asize = getAllainedSize(sizeof(vdp2rotationparameter_struct));
-  data = d.mapMemory(ssbo_paraA_.mem, 0, asize * 2);
-  memcpy(data, &paraa, sizeof(vdp2rotationparameter_struct));
-  memcpy(((char *)data + sizeof(vdp2rotationparameter_struct)), &parab, sizeof(vdp2rotationparameter_struct));
+  data = d.mapMemory(ssbo_paraA_.mem, 0, asize*2);
+  vdp2rotationparameter_struct upA = paraa;
+  vdp2rotationparameter_struct upB = parab;
+  rbgApplyLayerBankMasks(rbg->rgb_type, &upA, &upB);
+  memcpy(data, &upA, sizeof(vdp2rotationparameter_struct) );
+  memcpy(((char*)data + sizeof(vdp2rotationparameter_struct)), &upB, sizeof(vdp2rotationparameter_struct));
   d.unmapMemory(ssbo_paraA_.mem);
 
   rbgUniformParam->hres_scale = 1.0 / rbg->rotate_mval_h;

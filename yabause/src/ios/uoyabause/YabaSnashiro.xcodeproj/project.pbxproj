@@ -69,6 +69,7 @@
 		3F59092955F7D5FF6BCB67CE /* SharedBackupBrowseViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 16DEEF3B2E7E536506D1E13B /* SharedBackupBrowseViewModel.swift */; };
 		40A2E060403F0D1744359169 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66829CB1A742C941F2E024E7 /* MainTabView.swift */; };
 		4154406184513749444EC36F /* ProEntitlement.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2133A5BC4620B44CCFD378EC /* ProEntitlement.swift */; };
+		422C362A2405415CA9D2A911 /* FreeGameSlots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5049FAD4BE5E43B389B6E813 /* FreeGameSlots.swift */; };
 		4445CC2F2CF33A48B61ADF5A /* AccountViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8BC3D192232DE74BBFADB31 /* AccountViewModelTests.swift */; };
 		4496C91C1186FCA013C03B44 /* ShiftJISEncoding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A5677D3725B6B013B0D9B9 /* ShiftJISEncoding.swift */; };
 		47E43A01D064C17104C9A020 /* ProProducts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F28C1873CCCDF872D6D12EC /* ProProducts.swift */; };
@@ -125,6 +126,7 @@
 		6C0F00BF5369A780C935BC80 /* BackupMetadataStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06F431E0F671A6E545418C5C /* BackupMetadataStoreTests.swift */; };
 		6D3C67FE6F39C22C52469DF4 /* GameCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EECB23F3154A9158EC2F057 /* GameCardView.swift */; };
 		6DB209272097037300C9CC4B /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 6DB209262097037200C9CC4B /* GoogleService-Info.plist */; };
+		6DBDAADCB45D40A291723964 /* FreeGameSlots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5049FAD4BE5E43B389B6E813 /* FreeGameSlots.swift */; };
 		6E794666D609170957638264 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB23D0A4DE5F9227EB69F7D4 /* SignInView.swift */; };
 		6E8BA092DA7D18C59295265F /* SharePublishSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B13D82135A751031C72E0EF /* SharePublishSheet.swift */; };
 		6E8D5D943D8CBA2B6374B221 /* BackupShareLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC37D9C369C4EB58A2F4DD05 /* BackupShareLink.swift */; };
@@ -136,7 +138,6 @@
 		7498EDC7AA144412B9E624A1 /* TabQueries.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC74763AF25B66A542544EDE /* TabQueries.swift */; };
 		74BE2E437C23A2B25A3DF7CF /* AppTransactionProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ED3BCFC4793C4150D81370B /* AppTransactionProviding.swift */; };
 		78151D0CB4C0BD53B93BB05C /* GameRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F4AF8CB961069FAFCCF7C2 /* GameRepository.swift */; };
-		6DBDAADCB45D40A291723964 /* FreeGameSlots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5049FAD4BE5E43B389B6E813 /* FreeGameSlots.swift */; };
 		79B090C7DFABAEC2DB149915 /* DevicePinViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F30459A64FAD8B28550C4684 /* DevicePinViewModel.swift */; };
 		7A5296F31BF0309CF276C367 /* SidebarFocusModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8A3256678EBC3B5425EC91 /* SidebarFocusModel.swift */; };
 		7A9D27B46F6CB4EFAB7FBF2E /* SharedBackupDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 086B58DFF06A6C4F2F630E2D /* SharedBackupDetailSheet.swift */; };
@@ -263,6 +264,7 @@
 		AFE086294D34D1CCC27E1309 /* CloudBackupItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = D18457447B07C1667125DBD0 /* CloudBackupItem.swift */; };
 		B10E9C629F7404BF1AD3C9F3 /* CloudBackupViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9084F5E03F7F80D837C696C /* CloudBackupViewModel.swift */; };
 		B27D8DFB5A6917FFF4D95DF4 /* SettingsFocusScopeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 971757448393F11FBEF00D31 /* SettingsFocusScopeTests.swift */; };
+		B3179DB0D3A04E29B786CE03 /* FreeGameSlotsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D87B67F47D54CC7B7A0208E /* FreeGameSlotsTests.swift */; };
 		B658F33FB778A4CAAD5C32BB /* EntitlementStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C2D4C6247C02325C644730B /* EntitlementStatus.swift */; };
 		B666FB060167EC9A31412B2E /* GameRatingService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4498300E93167B2A7FA6E090 /* GameRatingService.swift */; };
 		B68263F95800E492F6A12162 /* GameListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324D487621CC6EEEA8F1AC88 /* GameListViewModel.swift */; };
@@ -279,7 +281,6 @@
 		C042CDA0440C89080839D7F6 /* SharedBackupReport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 703D1E4A684AA92FA72DB297 /* SharedBackupReport.swift */; };
 		C17415CD7F702EEB0F603F16 /* TabStateOwnershipTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5EB34C6BC4455CF96A7623C /* TabStateOwnershipTests.swift */; };
 		C28056FB528F922BBF9CBDA7 /* GameRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92F4AF8CB961069FAFCCF7C2 /* GameRepository.swift */; };
-		422C362A2405415CA9D2A911 /* FreeGameSlots.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5049FAD4BE5E43B389B6E813 /* FreeGameSlots.swift */; };
 		C3363DB52B430B96060DBD9F /* GamesTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC7852E0F3457C85584015B4 /* GamesTabView.swift */; };
 		C539C83CFD5D6079E8BACE52 /* BackupFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2644BD25461CD73831115DC /* BackupFile.swift */; };
 		C84487AF1796A200D7E37CCA /* DetailPane.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19793805B5EDC9295F1B8AEC /* DetailPane.swift */; };
@@ -289,7 +290,6 @@
 		CBF917C3CCABDBB63DCB43DF /* Pods_YabaSnashiro.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = C8BA1D770E151F00A6BA938B /* Pods_YabaSnashiro.framework */; };
 		CC28327528A3C606C89E59DF /* NotificationSettingsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26C3FBAF13673FF130E323A7 /* NotificationSettingsStoreTests.swift */; };
 		CC641E018814733F4BDE085D /* GameLimitTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B54379D702CCE3FA8647C003 /* GameLimitTests.swift */; };
-		B3179DB0D3A04E29B786CE03 /* FreeGameSlotsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D87B67F47D54CC7B7A0208E /* FreeGameSlotsTests.swift */; };
 		CE3B8F0B6F0449323F7ED04D /* SharedBackupRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9356ED5F02E045CECA24FA3 /* SharedBackupRepositoryTests.swift */; };
 		D050C3347C25E9F17F797F31 /* NotificationSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC0CAF0403C0B9C8B5A019F9 /* NotificationSettingsStore.swift */; };
 		D0F2F973DE59E7B70BBFAB58 /* GameListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 324D487621CC6EEEA8F1AC88 /* GameListViewModel.swift */; };
@@ -529,6 +529,7 @@
 		098977F096BD86869379DB6A /* Pods_YabaSnashiro_Lite.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_YabaSnashiro_Lite.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		09B2A8755F755639FB676FF6 /* GameLauncher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GameLauncher.swift; sourceTree = "<group>"; };
 		0A69E445E29AE8842A7E440A /* SharedBackupBrowseView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharedBackupBrowseView.swift; sourceTree = "<group>"; };
+		0D87B67F47D54CC7B7A0208E /* FreeGameSlotsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FreeGameSlotsTests.swift; sourceTree = "<group>"; };
 		0E01EF78C50E8456462692EF /* BackupSave.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackupSave.swift; sourceTree = "<group>"; };
 		0FDFCDB2D3DA82AA43302ED5 /* AccountTabRowsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AccountTabRowsTests.swift; sourceTree = "<group>"; };
 		13C84FD5DFCA668EAE0D340B /* ScreenshotTour.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ScreenshotTour.swift; sourceTree = "<group>"; };
@@ -578,6 +579,7 @@
 		4E8A4039DB6D8958FFACFC32 /* BackupShareLinkTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackupShareLinkTests.swift; sourceTree = "<group>"; };
 		4EECB23F3154A9158EC2F057 /* GameCardView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GameCardView.swift; sourceTree = "<group>"; };
 		4F4C8F66F8CFFD91216251DD /* AccountState.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AccountState.swift; sourceTree = "<group>"; };
+		5049FAD4BE5E43B389B6E813 /* FreeGameSlots.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FreeGameSlots.swift; sourceTree = "<group>"; };
 		53628FC7591E9AC1ABC8238B /* CartridgeFileMigration.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CartridgeFileMigration.swift; sourceTree = "<group>"; };
 		55912318B7516A836D1E3F72 /* UIColor+AppTheme.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "UIColor+AppTheme.swift"; sourceTree = "<group>"; };
 		56E99CFD7EB5C31A1899D97D /* PurchaseManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PurchaseManager.swift; sourceTree = "<group>"; };
@@ -644,7 +646,6 @@
 		912DF8A19770ED104CB441CD /* ControllerFocusRing.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ControllerFocusRing.swift; sourceTree = "<group>"; };
 		921C9D711E1628B4009065E6 /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		92F4AF8CB961069FAFCCF7C2 /* GameRepository.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GameRepository.swift; sourceTree = "<group>"; };
-		5049FAD4BE5E43B389B6E813 /* FreeGameSlots.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FreeGameSlots.swift; sourceTree = "<group>"; };
 		932F82C8BB916D9B91891B9E /* BackupScreenshotStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackupScreenshotStore.swift; sourceTree = "<group>"; };
 		9368C1FE2EED6491B95F8FBB /* BackupMetadataStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackupMetadataStore.swift; sourceTree = "<group>"; };
 		941B730A2BE733D70078C190 /* YabaSnashiro-Lite.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "YabaSnashiro-Lite.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -704,7 +705,6 @@
 		B334F6D1F40CF145A7352846 /* HomeUISmokeTest.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomeUISmokeTest.swift; sourceTree = "<group>"; };
 		B3CFE6E9F9555B9E2963B28F /* DevicePinService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DevicePinService.swift; sourceTree = "<group>"; };
 		B54379D702CCE3FA8647C003 /* GameLimitTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GameLimitTests.swift; sourceTree = "<group>"; };
-		0D87B67F47D54CC7B7A0208E /* FreeGameSlotsTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FreeGameSlotsTests.swift; sourceTree = "<group>"; };
 		B5EB34C6BC4455CF96A7623C /* TabStateOwnershipTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TabStateOwnershipTests.swift; sourceTree = "<group>"; };
 		B767A552B080AF90F52B82F0 /* BackupWorkQueue.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BackupWorkQueue.swift; sourceTree = "<group>"; };
 		B80859DA7F6EAD424ECB2670 /* GameListCacheTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GameListCacheTests.swift; sourceTree = "<group>"; };
@@ -1465,7 +1465,6 @@
 				644232BB1C6580010050611E /* Sources */,
 				644232BC1C6580010050611E /* Frameworks */,
 				644232BD1C6580010050611E /* Resources */,
-				79D1F8A1FD30F562CD279ADB /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -1487,7 +1486,6 @@
 				644232C71C6580010050611E /* Frameworks */,
 				644232C81C6580010050611E /* Resources */,
 				D9EE8EDA2C5F436100E47A22 /* Embed Frameworks */,
-				D9F081D478E8019D24F35E3F /* [CP] Embed Pods Frameworks */,
 			);
 			buildRules = (
 			);
@@ -1765,92 +1763,6 @@
 			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
 			showEnvVarsInLog = 0;
 		};
-		79D1F8A1FD30F562CD279ADB /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-YabaSnashiroTests/Pods-YabaSnashiroTests-frameworks.sh",
-				"${BUILT_PRODUCTS_DIR}/AppAuth/AppAuth.framework",
-				"${BUILT_PRODUCTS_DIR}/BoringSSL-GRPC/openssl_grpc.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseABTesting/FirebaseABTesting.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseAppCheckInterop/FirebaseAppCheckInterop.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseAuth/FirebaseAuth.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseAuthInterop/FirebaseAuthInterop.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseCore/FirebaseCore.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseCoreExtension/FirebaseCoreExtension.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseCoreInternal/FirebaseCoreInternal.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseCrashlytics/FirebaseCrashlytics.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseDatabase/FirebaseDatabase.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseFirestore/FirebaseFirestore.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseFirestoreInternal/FirebaseFirestoreInternal.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseInAppMessaging/FirebaseInAppMessaging.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseInstallations/FirebaseInstallations.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseMessaging/FirebaseMessaging.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseRemoteConfig/FirebaseRemoteConfig.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseRemoteConfigInterop/FirebaseRemoteConfigInterop.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseSessions/FirebaseSessions.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseSharedSwift/FirebaseSharedSwift.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseStorage/FirebaseStorage.framework",
-				"${BUILT_PRODUCTS_DIR}/GTMAppAuth/GTMAppAuth.framework",
-				"${BUILT_PRODUCTS_DIR}/GTMSessionFetcher/GTMSessionFetcher.framework",
-				"${BUILT_PRODUCTS_DIR}/GoogleDataTransport/GoogleDataTransport.framework",
-				"${BUILT_PRODUCTS_DIR}/GoogleSignIn/GoogleSignIn.framework",
-				"${BUILT_PRODUCTS_DIR}/GoogleUtilities/GoogleUtilities.framework",
-				"${BUILT_PRODUCTS_DIR}/Kingfisher/Kingfisher.framework",
-				"${BUILT_PRODUCTS_DIR}/PromisesObjC/FBLPromises.framework",
-				"${BUILT_PRODUCTS_DIR}/PromisesSwift/Promises.framework",
-				"${BUILT_PRODUCTS_DIR}/RecaptchaInterop/RecaptchaInterop.framework",
-				"${BUILT_PRODUCTS_DIR}/abseil/absl.framework",
-				"${BUILT_PRODUCTS_DIR}/gRPC-C++/grpcpp.framework",
-				"${BUILT_PRODUCTS_DIR}/gRPC-Core/grpc.framework",
-				"${BUILT_PRODUCTS_DIR}/leveldb-library/leveldb.framework",
-				"${BUILT_PRODUCTS_DIR}/nanopb/nanopb.framework",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/AppAuth.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/openssl_grpc.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseABTesting.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseAppCheckInterop.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseAuth.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseAuthInterop.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseCore.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseCoreExtension.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseCoreInternal.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseCrashlytics.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseDatabase.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseFirestore.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseFirestoreInternal.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseInAppMessaging.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseInstallations.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseMessaging.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseRemoteConfig.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseRemoteConfigInterop.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseSessions.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseSharedSwift.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseStorage.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GTMAppAuth.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GTMSessionFetcher.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GoogleDataTransport.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GoogleSignIn.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GoogleUtilities.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Kingfisher.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FBLPromises.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Promises.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/RecaptchaInterop.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/absl.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/grpcpp.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/grpc.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/leveldb.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/nanopb.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-YabaSnashiroTests/Pods-YabaSnashiroTests-frameworks.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
 		941B73042BE733D70078C190 /* ShellScript */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
@@ -1939,92 +1851,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-YabaSnashiro-Lite/Pods-YabaSnashiro-Lite-resources.sh\"\n";
-			showEnvVarsInLog = 0;
-		};
-		D9F081D478E8019D24F35E3F /* [CP] Embed Pods Frameworks */ = {
-			isa = PBXShellScriptBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputPaths = (
-				"${PODS_ROOT}/Target Support Files/Pods-YabaSnashiroUITests/Pods-YabaSnashiroUITests-frameworks.sh",
-				"${BUILT_PRODUCTS_DIR}/AppAuth/AppAuth.framework",
-				"${BUILT_PRODUCTS_DIR}/BoringSSL-GRPC/openssl_grpc.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseABTesting/FirebaseABTesting.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseAppCheckInterop/FirebaseAppCheckInterop.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseAuth/FirebaseAuth.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseAuthInterop/FirebaseAuthInterop.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseCore/FirebaseCore.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseCoreExtension/FirebaseCoreExtension.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseCoreInternal/FirebaseCoreInternal.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseCrashlytics/FirebaseCrashlytics.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseDatabase/FirebaseDatabase.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseFirestore/FirebaseFirestore.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseFirestoreInternal/FirebaseFirestoreInternal.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseInAppMessaging/FirebaseInAppMessaging.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseInstallations/FirebaseInstallations.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseMessaging/FirebaseMessaging.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseRemoteConfig/FirebaseRemoteConfig.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseRemoteConfigInterop/FirebaseRemoteConfigInterop.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseSessions/FirebaseSessions.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseSharedSwift/FirebaseSharedSwift.framework",
-				"${BUILT_PRODUCTS_DIR}/FirebaseStorage/FirebaseStorage.framework",
-				"${BUILT_PRODUCTS_DIR}/GTMAppAuth/GTMAppAuth.framework",
-				"${BUILT_PRODUCTS_DIR}/GTMSessionFetcher/GTMSessionFetcher.framework",
-				"${BUILT_PRODUCTS_DIR}/GoogleDataTransport/GoogleDataTransport.framework",
-				"${BUILT_PRODUCTS_DIR}/GoogleSignIn/GoogleSignIn.framework",
-				"${BUILT_PRODUCTS_DIR}/GoogleUtilities/GoogleUtilities.framework",
-				"${BUILT_PRODUCTS_DIR}/Kingfisher/Kingfisher.framework",
-				"${BUILT_PRODUCTS_DIR}/PromisesObjC/FBLPromises.framework",
-				"${BUILT_PRODUCTS_DIR}/PromisesSwift/Promises.framework",
-				"${BUILT_PRODUCTS_DIR}/RecaptchaInterop/RecaptchaInterop.framework",
-				"${BUILT_PRODUCTS_DIR}/abseil/absl.framework",
-				"${BUILT_PRODUCTS_DIR}/gRPC-C++/grpcpp.framework",
-				"${BUILT_PRODUCTS_DIR}/gRPC-Core/grpc.framework",
-				"${BUILT_PRODUCTS_DIR}/leveldb-library/leveldb.framework",
-				"${BUILT_PRODUCTS_DIR}/nanopb/nanopb.framework",
-			);
-			name = "[CP] Embed Pods Frameworks";
-			outputPaths = (
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/AppAuth.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/openssl_grpc.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseABTesting.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseAppCheckInterop.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseAuth.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseAuthInterop.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseCore.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseCoreExtension.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseCoreInternal.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseCrashlytics.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseDatabase.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseFirestore.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseFirestoreInternal.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseInAppMessaging.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseInstallations.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseMessaging.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseRemoteConfig.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseRemoteConfigInterop.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseSessions.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseSharedSwift.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FirebaseStorage.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GTMAppAuth.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GTMSessionFetcher.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GoogleDataTransport.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GoogleSignIn.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/GoogleUtilities.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Kingfisher.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/FBLPromises.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/Promises.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/RecaptchaInterop.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/absl.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/grpcpp.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/grpc.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/leveldb.framework",
-				"${TARGET_BUILD_DIR}/${FRAMEWORKS_FOLDER_PATH}/nanopb.framework",
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/Target Support Files/Pods-YabaSnashiroUITests/Pods-YabaSnashiroUITests-frameworks.sh\"\n";
 			showEnvVarsInLog = 0;
 		};
 		DA4198C3D41464FF58C9A330 /* [CP] Check Pods Manifest.lock */ = {
@@ -2741,7 +2567,7 @@
 					"$(PROJECT_DIR)/Debug",
 					"$(PROJECT_DIR)",
 				);
-				MARKETING_VERSION = 1.20.46;
+				MARKETING_VERSION = 1.20.54;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -2797,7 +2623,7 @@
 					"$(PROJECT_DIR)/Debug",
 					"$(PROJECT_DIR)",
 				);
-				MARKETING_VERSION = 1.20.46;
+				MARKETING_VERSION = 1.20.54;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
 				OTHER_LDFLAGS = (
 					"$(inherited)",
@@ -2951,7 +2777,7 @@
 					"$(PROJECT_DIR)/Debug",
 					"$(PROJECT_DIR)",
 				);
-				MARKETING_VERSION = 1.20.46;
+				MARKETING_VERSION = 1.20.54;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
 				OTHER_LDFLAGS = (
 					"-l\"c++\"",
@@ -3018,7 +2844,7 @@
 					"$(PROJECT_DIR)/Debug",
 					"$(PROJECT_DIR)",
 				);
-				MARKETING_VERSION = 1.20.46;
+				MARKETING_VERSION = 1.20.54;
 				MODULE_VERIFIER_SUPPORTED_LANGUAGE_STANDARDS = "gnu99 gnu++11";
 				OTHER_LDFLAGS = (
 					"-l\"c++\"",

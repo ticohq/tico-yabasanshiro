@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import org.devmiyax.yabasanshiro.R
 import org.uoyabause.android.YabauseApplication
+import org.uoyabause.android.auth.ui.PcSignInActivity
 import org.uoyabause.android.backup.model.BackupItem
 import org.uoyabause.android.backup.model.DeviceType
 import org.uoyabause.android.backup.model.LocalBackupFile
@@ -195,7 +196,7 @@ class BackupListFragment :
                             AppleBuilder().build(),
                         ),
                     ).build()
-            signInLauncher.launch(signInIntent)
+            signInLauncher.launch(PcSignInActivity.wrap(requireContext(), signInIntent))
         }
 
         // Configure file selector visibility

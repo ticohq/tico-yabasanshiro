@@ -177,8 +177,6 @@
     <string name="delete">Supprimer</string>
     <string name="select_game_directory">Sélectionner le Répertoire de Jeux</string>
     <string name="add_dir">Ajouter</string>
-    <string name="sound_curent">Actuel (version haute qualité pour appareils puissants)</string>
-    <string name="sound_legacy">Hérité (pour appareils moins puissants)</string>
     <string name="res_native">Natif (résolution native de cet appareil Android)</string>
     <string name="res_1080p">1080p</string>
     <string name="res_720p">720p</string>
@@ -974,4 +972,13 @@
     <string name="setting_on">Activé</string>
     <string name="setting_off">Désactivé</string>
     <string name="recommended_settings_offer_message">Ces réglages sont recommandés pour cet appareil. Voulez-vous les appliquer ?</string>
+    <string name="video_filter_crt_hyllian">CRT (Hyllian)</string>
+    <string name="video_filter_crt_lottes">CRT (Lottes)</string>
+    <string name="video_filter_crt_newpixie">CRT (NewPixie)</string>
+    <string name="setting_about">À propos</string>
+    <string name="third_party_notices">Mentions de tiers</string>
+    <string name="third_party_notices_summary">Licences des composants tiers inclus dans cette application</string>
+    <string name="sound_engine_light">Léger (sans DSP, pour appareils d\'entrée de gamme)</string>
+    <string name="sound_engine_normal">Normal (fidèle au matériel d\'origine)</string>
+    <string name="sound_engine_enhanced">Amélioré (son haute qualité, utilise plus de CPU)</string>
 </resources>

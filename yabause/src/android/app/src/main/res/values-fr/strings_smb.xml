@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="smb_card_title">Depuis un dossier partagé (SMB)</string>
+    <string name="smb_card_desc">Importez des images de jeux créées à partir de vos propres disques, depuis un PC ou un NAS de votre réseau domestique</string>
+    <string name="smb_dialog_title">Dossier partagé (SMB)</string>
+    <string name="smb_pc_hint">Partagez un dossier dans Windows (Propriétés &gt; Partage). Pour l\'hôte, saisissez l\'adresse IP de ce PC sur votre réseau domestique : exécutez ipconfig dans l\'invite de commandes et utilisez l\'adresse IPv4 (par exemple 192.168.x.x). Connectez-vous avec un compte Windows local qui a accès au dossier ; les comptes Microsoft ne peuvent souvent pas se connecter aux dossiers partagés.</string>
+    <string name="smb_host">Nom d\'hôte ou adresse IP</string>
+    <string name="smb_share">Nom du partage</string>
+    <string name="smb_username">Nom d\'utilisateur (facultatif)</string>
+    <string name="smb_password">Mot de passe</string>
+    <string name="smb_domain">Domaine (facultatif)</string>
+    <string name="smb_remember">Mémoriser cette connexion</string>
+    <string name="smb_connect">Se connecter</string>
+    <string name="smb_import">Importer</string>
+    <string name="smb_import_count">Importer (%1$d)</string>
+    <string name="smb_cancel_import">Annuler l\'importation</string>
+    <string name="smb_up_folder">.. (dossier parent)</string>
+    <string name="smb_empty">Aucun dossier ni fichier de jeu ici</string>
+    <string name="smb_progress_format">%1$s\n%2$d / %3$d fichiers, %4$s sur %5$s</string>
+    <string name="smb_extracting">Extraction de %1$s</string>
+    <string name="smb_error_host_required">Saisissez l\'hôte et le nom du partage</string>
+    <string name="smb_error_auth">Échec de la connexion. Vérifiez le nom d\'utilisateur, le mot de passe et le domaine.</string>
+    <string name="smb_error_share_not_found">Partage introuvable. Vérifiez le nom du partage.</string>
+    <string name="smb_error_unreachable">Impossible de joindre l\'hôte. Vérifiez l\'adresse et que le partage de fichiers est activé.</string>
+    <string name="smb_error_timeout">L\'hôte n\'a pas répondu à temps.</string>
+    <string name="smb_error_access_denied">Accès refusé.</string>
+    <string name="smb_error_not_found">Un fichier est introuvable sur le partage.</string>
+    <string name="smb_error_other">Erreur du dossier partagé : %1$s</string>
+    <string name="smb_import_done">%1$d jeu(x) importé(s)</string>
+    <string name="smb_import_cancelled">Importation annulée</string>
+    <string name="smb_import_no_game">Aucun jeu trouvé dans les fichiers importés</string>
+    <string name="smb_purpose_hint">Importez des images de jeux créées à partir de disques que vous possédez, depuis un dossier partagé sur un PC ou un NAS du même réseau. Les serveurs sur Internet ne peuvent pas être utilisés.</string>
+    <string name="smb_error_not_local">Seuls les PC et NAS de votre réseau local peuvent être utilisés. Saisissez une adresse locale, par exemple 192.168.x.x.</string>
+    <string name="smb_free_limit_none">La version gratuite accepte jusqu\'à %1$d jeux. Abonnez-vous pour en ajouter d\'autres.</string>
+    <string name="smb_free_limit_some">La version gratuite accepte jusqu\'à %1$d jeux : vous pouvez encore en ajouter %2$d, mais %3$d sont sélectionnés. Sélectionnez moins de jeux ou abonnez-vous.</string>
+</resources>

@@ -54,10 +54,10 @@ import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.apache.commons.compress.archivers.sevenz.SevenZFile
 import org.devmiyax.yabasanshiro.BuildConfig
 import org.devmiyax.yabasanshiro.R
 import org.uoyabause.android.YabauseStorage.Companion.storage
+import org.uoyabause.android.auth.ui.PcSignInActivity
 import java.io.File
 import java.io.FileDescriptor
 import java.io.FileInputStream
@@ -68,7 +68,6 @@ import java.nio.channels.FileChannel
 import java.util.Arrays
 import java.util.Calendar
 import java.util.Locale
-import java.util.zip.ZipFile
 import androidx.appcompat.view.ContextThemeWrapper as ContextThemeWrapper1
 
 @OptIn(DelicateCoroutinesApi::class)
@@ -169,7 +168,7 @@ class GameSelectPresenter(
                         AppleBuilder().build(),
                     ),
                 ).build()
-        launcher.launch(intent)
+        launcher.launch(PcSignInActivity.wrap(targetFragment.requireContext(), intent))
     }
 
     fun signOut() {
@@ -475,71 +474,19 @@ class GameSelectPresenter(
                 }
                 parcelFileDescriptor.close()
 
-                var targetFileName = ""
-
                 withContext(Dispatchers.Main) {
                     presenterListener.onUpdateDialogMessage("Extracting ${fd.name}")
                 }
 
                 val installDir = storage.getInstallDir()
-
-                if (zipFileName.lowercase(Locale.getDefault()).endsWith("zip")) {
-                    ZipFile(zipFileName).use { zip ->
-                        zip.entries().asSequence().forEach { entry ->
-                            val outputFile = File(installDir, entry.name)
-
-                            // パストラバーサル攻撃を防止するための検証
-                            if (!outputFile.canonicalPath.startsWith(installDir.canonicalPath)) {
-                                Log.e(tag, "Entry is outside of the target dir: ${entry.name}")
-                                return@forEach
-                            }
-
-                            if (entry.isDirectory) {
-                                outputFile.mkdirs()
-                            } else {
-                                outputFile.parentFile?.mkdirs()
-                                zip.getInputStream(entry).use { input ->
-                                    outputFile.outputStream().use { output ->
-                                        input.copyTo(output)
-                                    }
-                                }
-                            }
-
-                            if (entry.name.lowercase(Locale.ROOT).endsWith("ccd") ||
-                                entry.name.lowercase(Locale.ROOT).endsWith("cue") ||
-                                entry.name.lowercase(Locale.ROOT).endsWith("mds")
-                            ) {
-                                targetFileName = outputFile.absolutePath
-                            }
-                        }
-                    }
-                } else if (zipFileName.lowercase(Locale.getDefault()).endsWith("7z")) {
-                    SevenZFile.builder().setFile(File(zipFileName)).get().use { sz ->
-                        sz.entries.asSequence().forEach { entry ->
-                            val outputFile = File(installDir, entry.name)
-
-                            // パストラバーサル攻撃を防止するための検証
-                            if (!outputFile.canonicalPath.startsWith(installDir.canonicalPath)) {
-                                Log.e(tag, "Entry is outside of the target dir: ${entry.name}")
-                                return@forEach
-                            }
-
-                            if (entry.isDirectory) {
-                                outputFile.mkdirs()
-                            } else {
-                                outputFile.parentFile?.mkdirs()
-                                sz.getInputStream(entry).use { input ->
-                                    outputFile.outputStream().use { output ->
-                                        input.copyTo(output, bufferSize = 32 * 1024)
-                                    }
-                                }
-                            }
-
-                            if (entry.name.lowercase(Locale.ROOT).endsWith("ccd") ||
-                                entry.name.lowercase(Locale.ROOT).endsWith("cue") ||
-                                entry.name.lowercase(Locale.ROOT).endsWith("mds")
-                            ) {
-                                targetFileName = outputFile.absolutePath
+                var lastPercent = -1
+                val targetFileName = GameArchiveExtractor.extract(installDir, fd) { _, done, total ->
+                    if (total > 0) {
+                        val percent = (done.coerceAtMost(total) * 100 / total).toInt()
+                        if (percent != lastPercent) {
+                            lastPercent = percent
+                            launch(Dispatchers.Main) {
+                                presenterListener.onUpdateDialogMessage("Extracting ${fd.name} $percent%")
                             }
                         }
                     }

@@ -40,6 +40,8 @@ SOURCES_C := $(SOURCE_DIR)/osdcore.c \
 	$(SOURCE_DIR)/vidogl.c \
 	$(SOURCE_DIR)/yglcache.c \
 	$(SOURCE_DIR)/ygles.c \
+	$(SOURCE_DIR)/crt/crt_gl.c \
+	$(SOURCE_DIR)/crt/crt_layout.c \
 	$(SOURCE_DIR)/yglshaderes.c \
 	$(SOURCE_DIR)/snddummy.c \
 	$(SOURCE_DIR)/vidshared.c \
@@ -75,7 +77,9 @@ SOURCES_CXX := $(SOURCE_DIR)/Counter.cpp \
 	$(SOURCE_DIR)/vdp1.cpp \
 	$(SOURCE_DIR)/vdp2.cpp \
 	$(SOURCE_DIR)/PlayRecorder.cpp \
-	$(SOURCE_DIR)/jsoncpp.cpp
+	$(SOURCE_DIR)/jsoncpp.cpp \
+	$(SOURCE_DIR)/sound_hq/scsp_hq.cpp \
+	$(SOURCE_DIR)/sound_hq/dsp_float.cpp
 
 ifeq ($(HAVE_MUSASHI), 1)
 	SOURCES_C += $(SOURCE_DIR)/musashi/m68kcpu.c \

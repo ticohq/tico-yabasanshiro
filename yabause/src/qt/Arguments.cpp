@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+extern "C" char *wavefilename;  // sndwav.c
+
 namespace Arguments
 {
 
@@ -61,8 +63,100 @@ namespace Arguments
 		LAST_OPTION
 	};
 
+	// Developer options, parsed apart from the table above (its priority slots
+	// are all taken and "--vdp-dump=" is a prefix of the other two):
+	//   --vdp-dump=PREFIX       replay PREFIX_{vdp2vram,..,vdp1regs}.bin without CPU
+	//   --vdp-dump-out=FILE.png image written after the last frame
+	//   --vdp-dump-frames=N     frames to replay (default 3)
+	//   --polygon-mode=N        VDP1 polygon mode for this run
+	//   --resolution-mode=N     resolution mode for this run
+	//   --filter-mode=N         output filter (AAMODE) for this run
+	//   --vdp-dump-size=WxH     size in pixels of the emulation view
+	//   --vdp-dump-filters=a,b  filter of each replayed frame (switched at run time)
+	//   --rotate-screen=0|1     "Rotate 90 degree" for this run
+	//   --sound-wav=FILE        write the sound output to FILE (WAV, 44.1 kHz)
+	//   --sound-hq=0|1          SCSP high-quality rendering for this run
+	//   --sound-hq-chip-out=FILE  with --sound-hq=1: every sample, the chip's
+	//                           own output and the high-quality output, to FILE
+	//   --sound-hq-float-dsp=0|1|2  with --sound-hq=1: run the effect DSP in
+	//                           floating point (2: fed with the chip's sends, for
+	//                           checking the DSP arithmetic). Default: 1 while
+	//                           high quality is on, as the user setting does
+	//   --sound-hq-fx-out=FILE  with the float DSP: every sample, the effect
+	//                           returns of the chip's DSP and of the float DSP
+	//                           (raw float32: chip L, chip R, float L, float R)
+	//   --sh2-core=N            SH2 core for this run (1 = debug interpreter)
+	//   --scsp-main-mode=N      0 = sound CPU synced to the emulated time, 1 = realtime
+	//   --sound-test-events=S,L,R  at emulated frame S save a state to memory,
+	//                           at frame L load it back, at frame R reset (0 = never);
+	//                           an optional ,K prints SCSP HQ key-on statistics at frame K
+	// The dump run uses the OpenGL core, no disc, no sound and the HLE BIOS;
+	// everything goes to the volatile settings so the ini is not changed.
+	static void parseDeveloperOptions(const QStringList& arguments)
+	{
+		VolatileSettings * vs = QtYabause::volatileSettings();
+		bool dump = false;
+		foreach (const QString& a, arguments)
+		{
+			if (a.startsWith("--vdp-dump-out="))
+				vs->setValue("VdpDump/Out", a.mid((int)strlen("--vdp-dump-out=")));
+			else if (a.startsWith("--vdp-dump-frames="))
+				vs->setValue("VdpDump/Frames", a.mid((int)strlen("--vdp-dump-frames=")).toInt());
+			else if (a.startsWith("--vdp-dump="))
+			{
+				vs->setValue("VdpDump/Prefix", a.mid((int)strlen("--vdp-dump=")));
+				dump = true;
+			}
+			else if (a.startsWith("--polygon-mode="))
+				vs->setValue("Video/polygon_generation_mode", a.mid((int)strlen("--polygon-mode=")).toInt());
+			else if (a.startsWith("--resolution-mode="))
+				vs->setValue("Video/resolution_mode", a.mid((int)strlen("--resolution-mode=")).toInt());
+			else if (a.startsWith("--filter-mode="))
+				vs->setValue("Video/filter_mode", a.mid((int)strlen("--filter-mode=")).toInt());
+			else if (a.startsWith("--rotate-screen="))
+				vs->setValue("Video/RotateScreen", a.mid((int)strlen("--rotate-screen=")).toInt() != 0);
+			else if (a.startsWith("--vdp-dump-filters="))
+				vs->setValue("VdpDump/Filters", a.mid((int)strlen("--vdp-dump-filters=")));
+			else if (a.startsWith("--vdp-dump-size="))
+				vs->setValue("VdpDump/Size", a.mid((int)strlen("--vdp-dump-size=")));
+			else if (a.startsWith("--sound-wav="))
+			{
+				static QByteArray wavPath;
+				wavPath = a.mid((int)strlen("--sound-wav=")).toLocal8Bit();
+				wavefilename = wavPath.data();
+				vs->setValue("Sound/SoundCore", SNDCORE_WAV);
+			}
+			else if (a.startsWith("--sound-hq="))
+				vs->setValue("Sound/HighQuality", a.mid((int)strlen("--sound-hq=")).toInt() != 0);
+			else if (a.startsWith("--sound-hq-float-dsp="))
+				vs->setValue("Sound/HighQualityFloatDsp", a.mid((int)strlen("--sound-hq-float-dsp=")).toInt());
+			else if (a.startsWith("--sound-hq-fx-out="))
+				vs->setValue("Debug/SoundHqFxOut", a.mid((int)strlen("--sound-hq-fx-out=")));
+			else if (a.startsWith("--sound-hq-chip-out="))
+				vs->setValue("Debug/SoundHqChipOut", a.mid((int)strlen("--sound-hq-chip-out=")));
+			else if (a.startsWith("--sh2-core="))
+				vs->setValue("Advanced/SH2Interpreter", a.mid((int)strlen("--sh2-core=")).toInt());
+			else if (a.startsWith("--scsp-main-mode="))
+				vs->setValue("Sound/ScspMainMode", a.mid((int)strlen("--scsp-main-mode=")).toInt());
+			else if (a.startsWith("--sound-test-events="))
+				vs->setValue("Debug/SoundTestEvents", a.mid((int)strlen("--sound-test-events=")));
+		}
+		if (dump)
+		{
+			vs->setValue("autostart", true);
+			vs->setValue("Video/VideoCore", VIDCORE_OGL);
+			vs->setValue("Video/Fullscreen", false);
+			vs->setValue("General/CdRom", CDCORE_DUMMY);
+			vs->setValue("General/CdRomISO", QString());
+			vs->setValue("Sound/SoundCore", SNDCORE_DUMMY);
+			vs->setValue("General/EnableEmulatedBios", true);
+			vs->setValue("General/RecordDir", QString());
+		}
+	}
+
 	void parse()
 	{
+		parseDeveloperOptions(QApplication::arguments());
 		QVector<Option *> choosenOptions(7);
 		QVector<QString> params(7);
 

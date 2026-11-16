@@ -301,6 +301,13 @@ VdpPipeline * VdpPipelineFactory::findInGarbage(YglPipelineId id, uint32_t winfl
   return NULL;
 }
 
+void VdpPipelineFactory::deleteAllPipelines() {
+  for (int i = 0; i < garbageCollction.size(); i++) {
+    delete garbageCollction[i];
+  }
+  garbageCollction.clear();
+}
+
 void VdpPipelineFactory::dicardAllPielines() {
   garbageCollction.clear();
 }

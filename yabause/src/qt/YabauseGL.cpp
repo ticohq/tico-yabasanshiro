@@ -25,6 +25,10 @@
 #include <QOpenGLFunctions>
 #include <QSurfaceFormat>
 #include <YabauseThread.h>
+#include <QCoreApplication>
+#include <QImage>
+#include <QTimer>
+#include <stdio.h>
 
 
 YabauseGL::YabauseGL( QWidget* p )
@@ -94,6 +98,34 @@ void YabauseGL::paintGL() {
 	//printf("YabauseGL::paintGL");
 
 	if(pYabauseThread) pYabauseThread->execEmulation();
+
+	// --vdp-dump: once the requested frames are rendered, save the widget
+	// framebuffer and quit. grabFramebuffer() repaints through this function,
+	// so it runs from the event loop and the replay is already finished then
+	// (execEmulation() draws nothing more), leaving the last frame in place.
+	static bool dumpSaveQueued = false;
+	if (pYabauseThread && YabauseThread::vdpDumpMode() && pYabauseThread->vdpDumpReady()) {
+		if (!dumpSaveQueued) {
+			dumpSaveQueued = true;
+			QTimer::singleShot(0, this, [this]() {
+				int rc = 1;
+				const QString out = QtYabause::volatileSettings()->value("VdpDump/Out").toString();
+				if (!pYabauseThread->vdpDumpFailed() && !out.isEmpty()) {
+					QImage img = grabFramebuffer();
+					if (!img.isNull() && img.save(out)) {
+						printf("[VDPDUMP] wrote %s (%dx%d)\n", out.toLocal8Bit().constData(),
+						       img.width(), img.height());
+						rc = 0;
+					} else {
+						printf("[VDPDUMP] failed to write %s\n", out.toLocal8Bit().constData());
+					}
+				}
+				fflush(stdout);
+				QCoreApplication::exit(rc);
+			});
+		}
+		return;
+	}
 	update();
 }
 

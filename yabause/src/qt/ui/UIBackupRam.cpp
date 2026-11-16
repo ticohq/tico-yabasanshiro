@@ -136,8 +136,12 @@ void UIBackupRam::OnValueChanged(
 		const firebase::database::DataSnapshot &snapshot)
 {
 
+	// Firebase desktop invokes value listeners on its own worker thread.
+	// Only parse the snapshot here (it is valid only during this call) and
+	// hand the result to the GUI thread; touching cloud_items or Qt widgets
+	// from this thread races with the GUI and crashes intermittently.
 	std::vector<DataSnapshot> cd = snapshot.children();
-	cloud_items.clear();
+	std::vector<BackupItem> items;
 	for (int i = 0; i < cd.size(); i++)
 	{
 		BackupItem tmp;
@@ -217,8 +221,17 @@ void UIBackupRam::OnValueChanged(
 		sprintf(datestring, "%04d/%02d/%02d %02d:%02d:00",tmp.year+1980,tmp.month,tmp.day,tmp.hour,tmp.minute);
 		tmp.savedate = datestring;
 #endif
-		cloud_items.push_back(tmp);
+		items.push_back(tmp);
 	}
+
+	// The context object makes Qt drop the call if the dialog is destroyed first.
+	QMetaObject::invokeMethod(this, [this, items]() { applyCloudItems(items); },
+		Qt::QueuedConnection);
+}
+
+void UIBackupRam::applyCloudItems(const std::vector<BackupItem> &items)
+{
+	cloud_items = items;
 
 	// clear listwidget
 	lwCloudSaveList->clear();

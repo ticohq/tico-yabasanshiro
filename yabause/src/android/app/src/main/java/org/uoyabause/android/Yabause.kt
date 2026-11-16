@@ -118,6 +118,7 @@ import org.uoyabause.android.achievements.AchievementListFragment
 import org.uoyabause.android.achievements.RetroAchievementsManager
 import org.uoyabause.android.achievements.RetroAchievementsNotification
 import org.uoyabause.android.auth.RetroAchievementsAuthManager
+import org.uoyabause.android.auth.ui.PcSignInActivity
 import org.uoyabause.android.cheat.TabCheatFragment
 import org.uoyabause.android.game.BaseGame
 import org.uoyabause.android.game.GameUiEvent
@@ -782,6 +783,8 @@ class Yabause :
         val retroAchievementsManager = RetroAchievementsManager.getInstance(this)
         retroAchievementsManager.setCurrentActivity(this)
 
+        showKeyboardMapIfNeeded()
+
         // TEST: Show RetroAchievements notification popup
 
 /*
@@ -1326,6 +1329,12 @@ class Yabause :
 
                     val resolutionSetting = gamePreference.getStringSafe("pref_resolution", "0").toInt()
                     YabauseRunnable.setResolutionMode(resolutionSetting)
+
+                    // The core keeps the user resolution apart from the effective one
+                    // (CRT forces scale 1), so the order of these two calls does not matter.
+                    val filterSetting = gamePreference.getStringSafe(VideoFilter.KEY, VideoFilter.NONE).toInt()
+                    YabauseRunnable.setFilter(filterSetting)
+                    Log.d(TAG, "setFilter $filterSetting")
 
                     YabauseRunnable.enableComputeShader(
                         if (gamePreference.getBoolean(
@@ -2211,6 +2220,10 @@ class Yabause :
             intent.getStringExtra(BenchmarkRequest.EXTRA_RESOLUTION)?.toIntOrNull() ?: 0
         YabauseRunnable.setResolutionMode(resolution)
 
+        // A rung never includes an output filter, and a CRT filter would force
+        // scale 1 and replace the resolution under test.
+        YabauseRunnable.setFilter(0)
+
         Log.i(
             TAG,
             "benchmark disc $benchmarkDisc config: core=$videoInterface polygon=$polygonMode " +
@@ -2294,7 +2307,11 @@ class Yabause :
         val sh2Cache = sharedPref.getBoolean("pref_use_sh2_cache", true)
         YabauseRunnable.setUseSh2Cache(if (sh2Cache) 1 else 0)
 
-        val ifilter = sharedPref.getStringSafe("pref_filter", "0").toInt()
+        // Per game; seeded from the global setting (see IN_GAME_PREFS).
+        val ifilter =
+            gamePreference
+                .getStringSafe(VideoFilter.KEY, sharedPref.getStringSafe(VideoFilter.KEY, VideoFilter.NONE))
+                .toInt()
         YabauseRunnable.setFilter(ifilter)
         Log.d(TAG, "setFilter $ifilter")
         val audioout = sharedPref.getBoolean("pref_audio", true)
@@ -2380,9 +2397,17 @@ class Yabause :
         Log.d(TAG, "getGamePath $gamePath")
         Log.d(TAG, "getMemoryPath $memoryPath")
         Log.d(TAG, "getCartridgePath $cartridgePath")
-        val isound = sharedPref.getStringSafe("pref_sound_engine", "1").toInt()
+        // Sound level: 0 = Light (legacy engine, no DSP), 1 = Normal, 2 = Enhanced
+        // (engine 1 + high-quality renderer). Unknown values behave as Normal.
+        val soundLevel = sharedPref.getStringSafe("pref_sound_engine", "1").toIntOrNull() ?: 1
+        val isound = if (soundLevel == 0) 0 else 1
         YabauseRunnable.setSoundEngine(isound)
         Log.d(TAG, "setSoundEngine $isound")
+        // A benchmark rung's fps must not depend on the user's sound choice, so
+        // Enhanced runs as Normal there.
+        val soundHq = if (benchmarkDisc == 0 && soundLevel == 2) 1 else 0
+        YabauseRunnable.setSoundHighQuality(soundHq)
+        Log.d(TAG, "setSoundHighQuality $soundHq")
         val scspSync = sharedPref.getStringSafe("pref_scsp_sync_per_frame", "1").toInt()
         YabauseRunnable.setScspSyncPerFrame(scspSync)
         val cpuSync = sharedPref.getStringSafe("pref_cpu_sync_per_line", "1").toInt()
@@ -2391,6 +2416,23 @@ class Yabause :
         YabauseRunnable.setScspSyncTimeMode(scspTimeSync)
 
         updateInputDevice()
+    }
+
+    /** At game start, shows which key drives each Saturn button when player 1 uses a keyboard. */
+    private fun showKeyboardMapIfNeeded() {
+        if (!::padManager.isInitialized) {
+            Log.d(TAG, "KeyboardMap: pad manager not ready")
+            return
+        }
+        val keyMap = padManager.getPlayer1KeyboardMap()
+        Log.d(TAG, "KeyboardMap: player1=${padManager.getPlayer1InputDevice()} map=$keyMap")
+        if (keyMap == null) return
+        val overlay = findViewById<KeyboardMapOverlayView>(R.id.keyboard_map_overlay)
+        if (overlay == null) {
+            Log.w(TAG, "KeyboardMap: overlay view is missing from this layout")
+            return
+        }
+        overlay.show(keyMap, padManager.getPlayer1InputDevice())
     }
 
     fun updateInputDevice() {
@@ -3190,7 +3232,7 @@ class Yabause :
                         AppleBuilder().build(),
                     ),
                 ).build()
-        firebaseSignInLauncher.launch(signInIntent)
+        firebaseSignInLauncher.launch(PcSignInActivity.wrap(this, signInIntent))
     }
 
     /**

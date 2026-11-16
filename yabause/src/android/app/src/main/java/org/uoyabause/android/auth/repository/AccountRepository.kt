@@ -28,6 +28,7 @@ import org.uoyabause.android.auth.RetroAchievementsAuthManager
 import org.uoyabause.android.auth.models.AccountConnectionState
 import org.uoyabause.android.auth.models.ConnectedAccountsState
 import org.uoyabause.android.auth.models.UserProfile
+import org.uoyabause.android.auth.ui.PcSignInActivity
 import org.uoyabause.android.auth.utils.AccountConstants
 import kotlin.coroutines.resume
 
@@ -887,7 +888,7 @@ class AccountRepository(
                     }
 
                 // Launch sign-in
-                launcher.launch(signInIntent)
+                launcher.launch(PcSignInActivity.wrap(activity, signInIntent))
             } catch (e: Exception) {
                 Log.e(TAG, "Error triggering sign-in", e)
                 continuation.resume(null)

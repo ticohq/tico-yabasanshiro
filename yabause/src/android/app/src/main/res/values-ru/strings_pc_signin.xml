@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pc_sign_in_title">Вход</string>
+    <string name="pc_sign_in_google_title">Войти через Google</string>
+    <string name="pc_sign_in_google_description">В Google Play Игры для ПК вход в Google выполняется в браузере. Получите код и введите его на странице Google с ПК или телефона.</string>
+    <string name="pc_sign_in_get_code">Получить код входа</string>
+    <string name="pc_sign_in_step_open">1. Откройте эту страницу в браузере на ПК или телефоне</string>
+    <string name="pc_sign_in_open_browser">Открыть в браузере</string>
+    <string name="pc_sign_in_step_enter">2. Введите этот код и выберите аккаунт Google</string>
+    <string name="pc_sign_in_waiting">Ожидание завершения в браузере…</string>
+    <string name="pc_sign_in_signing_in">Выполняется вход…</string>
+    <string name="pc_sign_in_denied">Вход отменён в браузере.</string>
+    <string name="pc_sign_in_expired">Срок действия кода истёк. Получите новый код и повторите попытку.</string>
+    <string name="pc_sign_in_failed">Не удалось войти: %1$s</string>
+    <string name="pc_sign_in_new_code">Получить новый код</string>
+    <string name="pc_sign_in_not_configured">Вход через Google недоступен в этой сборке.</string>
+    <string name="pc_sign_in_terms">Выполняя вход, вы принимаете Условия использования (yabasanshiro.com/terms-of-use) и Политику конфиденциальности (yabasanshiro.com/privacy).</string>
+</resources>

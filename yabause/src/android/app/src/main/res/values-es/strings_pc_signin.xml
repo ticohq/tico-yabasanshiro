@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pc_sign_in_title">Iniciar sesión</string>
+    <string name="pc_sign_in_google_title">Iniciar sesión con Google</string>
+    <string name="pc_sign_in_google_description">En Google Play Juegos para PC, el inicio de sesión de Google se hace en el navegador. Obtén un código e ingrésalo en la página de Google desde tu PC o tu teléfono.</string>
+    <string name="pc_sign_in_get_code">Obtener código de inicio de sesión</string>
+    <string name="pc_sign_in_step_open">1. Abre esta página en un navegador de tu PC o teléfono</string>
+    <string name="pc_sign_in_open_browser">Abrir en el navegador</string>
+    <string name="pc_sign_in_step_enter">2. Ingresa este código y elige tu cuenta de Google</string>
+    <string name="pc_sign_in_waiting">Esperando a que termines en el navegador…</string>
+    <string name="pc_sign_in_signing_in">Iniciando sesión…</string>
+    <string name="pc_sign_in_denied">El inicio de sesión se canceló en el navegador.</string>
+    <string name="pc_sign_in_expired">El código caducó. Obtén un código nuevo e inténtalo otra vez.</string>
+    <string name="pc_sign_in_failed">No se pudo iniciar sesión: %1$s</string>
+    <string name="pc_sign_in_new_code">Obtener un código nuevo</string>
+    <string name="pc_sign_in_not_configured">El inicio de sesión con Google no está disponible en esta versión.</string>
+    <string name="pc_sign_in_terms">Al iniciar sesión, aceptas los Términos de uso (yabasanshiro.com/terms-of-use) y la Política de privacidad (yabasanshiro.com/privacy).</string>
+</resources>

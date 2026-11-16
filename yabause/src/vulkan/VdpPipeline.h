@@ -72,9 +72,12 @@ public:
     this->vulkan = vulkan;
   }
 
-  VkShaderModule getShader(uint32_t id);
+  // Modules are cached per (id, source). The same id can carry different
+  // source (e.g. the VDP1 programs differ between GPU_TESSERATION and the
+  // other polygon modes), so the id alone must not select a cached module.
+  VkShaderModule getShader(uint32_t id, const string & code);
   std::string get_shader_header();
-  
+
 
   VkShaderModule compileShader(uint32_t id, const string & code, int type);
 
@@ -88,7 +91,7 @@ private:
 
   }
 
-  map<uint32_t, VkShaderModule> shaders;
+  map<std::pair<uint32_t, std::size_t>, VkShaderModule> shaders;
 
 };
 

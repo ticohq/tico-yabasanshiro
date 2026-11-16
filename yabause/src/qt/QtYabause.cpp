@@ -107,6 +107,8 @@ SoundInterface_struct *SNDCoreList[] = {
 #ifdef ARCH_IS_MACOSX
 &SNDMac,
 #endif
+// Developer use only (--sound-wav=FILE); the settings page does not list it.
+&SNDWave,
 NULL
 };
 

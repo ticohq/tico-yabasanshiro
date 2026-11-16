@@ -770,6 +770,11 @@ Render Quality|描画品質
 Low|低品質
 High|高品質
 Filter|フィルタ
+Scanline|スキャンライン
+Bilinear|バイリニア
+CRT Hyllian|CRT (Hyllian)
+CRT Lottes|CRT (Lottes)
+CRT NewPixie|CRT (NewPixie)
 Polygon Generation|ポリゴン生成方法
 Internal resolution|内部解像度
 RBG Resolution|回転スクロール面の解像度
@@ -821,6 +826,8 @@ Other sound core|その他のサウンドコア
 SCSP sync count per frame|1 フレームあたりの SCSP 同期回数
 Time Synchronization Mode|時刻同期モード
 Synchronize to CPU|CPU に同期
+High quality sound|高音質サウンド
+Renders the sound with less aliasing and a floating-point effect DSP. Uses more CPU.|エイリアシングを抑え、エフェクト DSP を浮動小数点で計算して音を生成します。CPU の負荷が増えます。
 Run Setup &Wizard...|セットアップウィザードを実行(&W)...
 Some of these settings only take effect when Yaba Sanshiro starts. Please restart it.|これらの設定の一部は Yaba Sanshiro の起動時にのみ反映されます。再起動してください。
 Buttons assigned|割り当てたボタン

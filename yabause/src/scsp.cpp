@@ -109,6 +109,9 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 #include <limits.h>
 #include <string.h>
 #include <climits>
+// Before the min/max macros below: it pulls in <vector>.
+#include "sound_hq/scsp_hq.h"
+#include "sound_hq/ram_watch.h"
 #ifdef _MSC_VER
 #include <intrin.h>  // _BitScanForward (MSVC has no __builtin_ctz)
 #endif
@@ -126,6 +129,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 #include "sh2cache.h"
 #include "threads.h"
 #include <atomic>
+#include <mutex>
 
 #ifndef max
 #define max(a,b) (((a) > (b)) ? (a) : (b))
@@ -1368,10 +1372,63 @@ int scsp_debug_get_sample_buffer(int slot, s16 *buffer, int max_samples)
    return count;
 }
 
+// High-quality output state that keyon() needs (the rest sits with
+// generate_sample() below). The chip never reads any of it.
+static std::atomic<int> scsp_hq_enabled(0);
+// Set by keyon() while the high-quality output is on, consumed by the tap
+// capture at the slot's next op2. A key on lands between generate_sample()
+// calls, and for slots 26-30 op7 (which counts sample_counter) runs in the
+// next call before op2 does, so the chip's own counters cannot tell.
+static std::atomic<u8> scsp_hq_keyon_pending[32];
+// Developer statistics (ScspHqGetKeyOnStats), only counted while it is on.
+static std::atomic<u32> scsp_hq_stat_keyon_calls[32];
+static std::atomic<u32> scsp_hq_stat_tap_keyons[32];
+static std::atomic<u32> scsp_hq_stat_counter_zero[32];
+
+// Float DSP (ScspSetHighQualityFloatDsp): 0 off, 1 on, 2 on and fed with the
+// chip's own sends (developer verification).
+static std::atomic<int> scsp_hq_float_dsp_mode(0);
+// Sound RAM writes by the CPUs (and the SCSP DMA) while the float DSP may be
+// on: the float DSP's copy of those words is dropped at the next sample
+// (sound_hq/ram_watch.h). The DSP's own writes are not reported.
+static std::atomic<int> scsp_hq_ram_watch(0);
+static ScspHqRamWatch scsp_hq_ram_pages;
+// Serializes the two setters below, so the watch always matches both settings.
+static std::mutex scsp_hq_setting_mutex;
+
+// Called after every CPU or DMA write to sound RAM. Off: one relaxed load.
+static INLINE void scsp_hq_note_ram_write(u32 addr, u32 size)
+{
+   if (scsp_hq_ram_watch.load(std::memory_order_relaxed))
+      scsp_hq_ram_pages.mark(addr, size);
+}
+
+// Stores a setting that can start or stop the float DSP. Starting: the watch
+// goes on first, so no CPU write is missed once the float DSP can run.
+// Stopping: the setting goes first. Called under scsp_hq_setting_mutex.
+static void scsp_hq_store_setting(std::atomic<int> * setting, int value, int watch)
+{
+   if (watch)
+   {
+      scsp_hq_ram_watch.store(1, std::memory_order_seq_cst);
+      setting->store(value, std::memory_order_seq_cst);
+   }
+   else
+   {
+      setting->store(value, std::memory_order_seq_cst);
+      scsp_hq_ram_watch.store(0, std::memory_order_seq_cst);
+   }
+}
+
 void keyon(struct Slot * slot)
 {
    if (slot->state.envelope == RELEASE )
    {
+      if (scsp_hq_enabled.load(std::memory_order_relaxed))
+      {
+         scsp_hq_keyon_pending[slot->state.num].store(1, std::memory_order_relaxed);
+         scsp_hq_stat_keyon_calls[slot->state.num].fetch_add(1, std::memory_order_relaxed);
+      }
      slot->state.envelope = ATTACK;
       slot->state.sample_counter = 0;
       slot->state.step_count = 0;
@@ -1918,10 +1975,13 @@ int get_sdl_shift(int sdl)
 
 
 
+static void scsp_hq_request_reset(void);
+
 void new_scsp_reset(struct Scsp* s)
 {
    int slot_num;
    int backDebug = s->debug_mode;
+   scsp_hq_request_reset();
    memset(s, 0, sizeof(struct Scsp));
    s->debug_mode = backDebug;
 
@@ -2203,6 +2263,339 @@ static void scsp_decay_next(slot_t *slot);
 static void scsp_attack_next(slot_t *slot);
 static void scsp_slot_update_keyon(slot_t *slot);
 
+//////////////////////////////////////////////////////////////////////////////
+// High-quality output (sound_hq/scsp_hq.h), an enhancement that is off by
+// default.
+//
+// Off: generate_sample() runs the code it always ran. Every addition sits
+// behind a check of its local hq_rec, which is 0, and nothing else is done.
+// On: the chip still runs unchanged. Its own output is still computed, and
+// every value the game or the sound driver can observe stays the same. The
+// capture functions below only READ chip state, into arrays the chip never
+// reads, and the rendered sample replaces the chip's at the very end.
+//
+// generate_sample() runs on the SCSP thread, while ScspSetHighQuality() and
+// the reset requests (chip reset, state load) come from other threads. So
+// they are atomics that generate_sample() consumes at the start of a sample.
+//
+// The pipeline is staggered (slot k: op1 at step k, mixed at step k + 6), so
+// slots 26-31 are mixed in the next call. Each stage's view of a slot is kept
+// in scsp_hq_pending until the slot is mixed.
+
+static std::atomic<int> scsp_hq_reset_request(1);
+static ScspHqTaps scsp_hq_taps;
+// Created off the SCSP thread (ScspSetHighQuality, ScspInit) and published by
+// the release store of scsp_hq_enabled; deleted in ScspDeInit after the SCSP
+// thread has stopped.
+static ScspHqRenderer *scsp_hq_renderer = NULL;
+static std::mutex scsp_hq_create_mutex;
+static ScspHqQuantizer scsp_hq_quantizer;
+void (*scsp_hq_chip_output_hook)(s16 chip_l, s16 chip_r, s16 hq_l, s16 hq_r) = NULL;
+void (*scsp_hq_fx_output_hook)(const float chip[2], const float flt[2]) = NULL;
+// The chip DSP as the float DSP sees it, and the ring offset and sends this
+// sample's program ran with (taken before the chip's DSP runs).
+static ScspHqDspView scsp_hq_dsp_view;
+static u32 scsp_hq_dsp_mdec_ct;
+
+// Builds the renderer (its kernel table) on the calling thread, never on the
+// SCSP thread.
+static void scsp_hq_create_renderer(void)
+{
+   std::lock_guard<std::mutex> lock(scsp_hq_create_mutex);
+   if (scsp_hq_renderer == NULL)
+      scsp_hq_renderer = new ScspHqRenderer();
+}
+
+struct ScspHqPending
+{
+   u8 op1;       // op1 ran (slot active): phase and step are valid
+   u8 op2;       // op2 ran: pos and key_on are valid
+   u8 op5;       // the op5 capture ran: silent, sample and att are valid
+   u8 key_on;
+   u8 silent;    // op5 forced the output to 0
+   u16 phase;    // read fraction, 14 bits
+   u16 pos;      // read position
+   u32 step;     // increment, 14-bit fraction
+   s16 sample;   // op5 input (interpolated, before the level)
+   u16 att;      // op5 attenuation, 0xFFFF for SDIR
+};
+static ScspHqPending scsp_hq_pending[32];
+
+void ScspSetHighQuality(int on)
+{
+   std::lock_guard<std::mutex> lock(scsp_hq_setting_mutex);
+   on = on ? 1 : 0;
+   if (on)
+      scsp_hq_create_renderer();
+   const int changed = scsp_hq_enabled.load(std::memory_order_relaxed) != on;
+   scsp_hq_store_setting(&scsp_hq_enabled, on,
+                         on && scsp_hq_float_dsp_mode.load(std::memory_order_relaxed) != 0);
+   if (changed)
+      scsp_hq_reset_request.store(1, std::memory_order_release);
+}
+
+void ScspSetHighQualityFloatDsp(int mode)
+{
+   std::lock_guard<std::mutex> lock(scsp_hq_setting_mutex);
+   mode = mode < 0 ? 0 : (mode > 2 ? 2 : mode);
+   // the renderer seeds the float DSP from the chip when it turns on
+   scsp_hq_store_setting(&scsp_hq_float_dsp_mode, mode,
+                         mode != 0 && scsp_hq_enabled.load(std::memory_order_relaxed) != 0);
+}
+
+int ScspGetHighQualityFloatDsp(void)
+{
+   return scsp_hq_float_dsp_mode.load(std::memory_order_relaxed);
+}
+
+u32 ScspHqGetFloatDspSeedCount(void)
+{
+   // the renderer is created and deleted under this mutex
+   std::lock_guard<std::mutex> lock(scsp_hq_create_mutex);
+   return scsp_hq_renderer ? scsp_hq_renderer->float_dsp_seed_count() : 0;
+}
+
+void ScspHqGetKeyOnStats(u32 keyon_calls[32], u32 tap_keyons[32], u32 counter_zero[32])
+{
+   int i;
+   for (i = 0; i < 32; i++)
+   {
+      keyon_calls[i] = scsp_hq_stat_keyon_calls[i].load(std::memory_order_relaxed);
+      tap_keyons[i] = scsp_hq_stat_tap_keyons[i].load(std::memory_order_relaxed);
+      counter_zero[i] = scsp_hq_stat_counter_zero[i].load(std::memory_order_relaxed);
+   }
+}
+
+int ScspGetHighQuality(void)
+{
+   return scsp_hq_enabled.load(std::memory_order_relaxed);
+}
+
+// Chip reset and state load: the renderer's per-voice history no longer
+// matches the chip, so it is dropped at the next sample.
+static void scsp_hq_request_reset(void)
+{
+   scsp_hq_reset_request.store(1, std::memory_order_release);
+}
+
+static void scsp_hq_begin_sample(void)
+{
+   if (scsp_hq_reset_request.exchange(0, std::memory_order_acquire))
+   {
+      int i;
+      scsp_hq_renderer->reset();
+      memset(scsp_hq_pending, 0, sizeof(scsp_hq_pending));
+      for (i = 0; i < 32; i++)
+         scsp_hq_keyon_pending[i].store(0, std::memory_order_relaxed);
+   }
+   const int fx_mode = scsp_hq_float_dsp_mode.load(std::memory_order_acquire);
+   scsp_hq_renderer->float_dsp = fx_mode != 0;
+   scsp_hq_renderer->float_dsp_chip_sends = fx_mode == 2;
+   // CPU writes since the last sample: the float DSP reads those words from
+   // RAM again (8 relaxed loads when nothing was written)
+   if (fx_mode != 0)
+   {
+      ScspHqRenderer *r = scsp_hq_renderer;
+      scsp_hq_ram_pages.take([r](uint32_t first, uint32_t count) { r->discard_ram(first, count); });
+   }
+}
+
+// The chip's DSP for the float DSP: its program and parameters, the ring
+// offset it ran with, and its datapath after the run (for seeding).
+static void scsp_hq_fill_dsp_view(int rbp, int rbl)
+{
+   ScspHqDspView *v = &scsp_hq_dsp_view;
+   v->mpro = (const uint64_t *)scsp_dsp.mpro;
+   v->coef = (const uint16_t *)scsp_dsp.coef;
+   v->madrs = (const uint16_t *)scsp_dsp.madrs;
+   v->mdec_ct = scsp_hq_dsp_mdec_ct;
+   v->rbp = rbp;
+   v->rbl = rbl;
+   v->last_step = scsp_dsp.last_step;
+   v->temp = (const int32_t *)scsp_dsp.temp;
+   v->mems = (const int32_t *)scsp_dsp.mems;
+   v->efreg = (const int16_t *)scsp_dsp.efreg;
+   v->shift_reg = scsp_dsp.shift_reg;
+   v->inputs = scsp_dsp.inputs;
+   v->y_reg = scsp_dsp.y_reg;
+   v->frc_reg = scsp_dsp.frc_reg;
+   v->adrs_reg = scsp_dsp.adrs_reg;
+   v->read_value = scsp_dsp.read_value;
+   v->read_pending = scsp_dsp.read_pending;
+   v->write_pending = scsp_dsp.write_pending;
+   v->io_addr = scsp_dsp.io_addr;
+}
+
+// Before op1: the phase the waveform is read with (op1 captures the same
+// pre-increment value for op2) and this sample's increment, as op1 computes it.
+static void scsp_hq_capture_op1(struct Slot * slot)
+{
+   ScspHqPending *p = &scsp_hq_pending[slot->state.num];
+   p->op1 = 0;
+   if (slot->state.attenuation >= 0x3bf)
+      return;
+   const s32 base = (s32)(0x400 ^ slot->regs.fns) + new_scsp_get_plfo(slot);
+   const u32 oct = slot->regs.oct ^ 8;
+   p->phase = (u16)(((u32)slot->state.waveform_phase_value & ((1u << 18) - 1)) >> 4);
+   p->step = ((u32)(base << oct) & ~0xFu) >> 4;
+   p->op1 = 1;
+}
+
+// Before op2: the address op2 reads at (before it advances).
+static void scsp_hq_capture_op2(struct Slot * slot)
+{
+   ScspHqPending *p = &scsp_hq_pending[slot->state.num];
+   p->op2 = 0;
+   if (slot->state.attenuation >= 0x3bf)
+      return;
+   p->pos = (u16)slot->state.sample_offset;
+   p->key_on = scsp_hq_keyon_pending[slot->state.num].exchange(0, std::memory_order_relaxed) != 0;
+   if (slot->state.sample_counter == 0)  // statistics only: misses slots 26-30
+      scsp_hq_stat_counter_zero[slot->state.num].fetch_add(1, std::memory_order_relaxed);
+   p->op2 = 1;
+}
+
+// Before op5: its input and the attenuation it applies (op5 and apply_volume).
+static void scsp_hq_capture_op5(struct Slot * slot)
+{
+   ScspHqPending *p = &scsp_hq_pending[slot->state.num];
+   p->op5 = 1;
+   if (slot->state.attenuation >= 0x3bf)
+   {
+      p->silent = 1;
+      return;
+   }
+   p->silent = 0;
+   p->sample = slot->state.output;
+   if (slot->regs.sd)
+      p->att = 0xFFFF;
+   else
+   {
+      const u16 eff_att = (slot->state.envelope == ATTACK && slot->regs.hold) ? 0 : slot->state.attenuation;
+      const u16 slot_att = (u16)(eff_att + new_scsp_get_alfo(slot));
+      s32 v = slot->regs.tl * 4 + slot_att;
+      if (v > 0x3ff)
+         v = 0x3ff;
+      p->att = (u16)v;
+   }
+}
+
+// A 1.14 gain from the chip's shifts (>> sdl, then >> pan).
+static s16 scsp_hq_gain(int sdl_shift, int pan_shift)
+{
+   const int shift = sdl_shift + pan_shift;
+   return shift > 14 ? 0 : (s16)(16384 >> shift);
+}
+
+// When the slot is mixed: the tap for the renderer.
+static void scsp_hq_tap_slot(struct Slot * slot, int muted)
+{
+   static const u16 sb_xor_table[4] = { 0x0000, 0x7FFF, 0x8000, 0xFFFF };  // as op3
+   ScspHqPending *p = &scsp_hq_pending[slot->state.num];
+   ScspHqVoiceTap *t = &scsp_hq_taps.v[slot->state.num];
+   int pan_l = 0, pan_r = 0;
+
+   t->key_on = p->op2 && p->key_on;
+   if (t->key_on)
+      scsp_hq_stat_tap_keyons[slot->state.num].fetch_add(1, std::memory_order_relaxed);
+   t->pcm8 = slot->regs.pcm8b != 0;
+   t->loop = slot->regs.lpctl == 1;
+   t->lsa = slot->regs.lsa;
+   t->lea = slot->regs.lea;
+   t->sb_xor = sb_xor_table[slot->regs.sbctl & 3];
+   t->sa = slot->regs.sa;
+   t->pos = p->pos;
+   t->phase = p->phase;
+   t->step = p->step;
+   if (!p->op5)
+   {
+      // op5 ran before this mode was enabled or the history was dropped
+      // (slots 26-31 are mixed one call after their op5): take the chip's
+      // own output for this one sample, level included
+      t->kind = ScspHqVoiceTap::SAMPLE;
+      t->sample = slot->state.output;
+      t->att = 0xFFFF;
+   }
+   else if (p->silent)
+   {
+      t->kind = ScspHqVoiceTap::SAMPLE;
+      t->sample = 0;
+      t->att = 0xFFFF;
+   }
+   else
+   {
+      // the renderer re-reads forward-playing RAM waveforms; noise, FM,
+      // reverse and alternate loops and short waves use the chip's sample
+      t->kind = (p->op1 && p->op2 && slot->regs.ssctl == 0 && slot->regs.lpctl <= 1 &&
+                 slot->regs.mdl <= 4 && new_scsp_shortwave_mask(slot) == 0xFFFFFFFF)
+                   ? ScspHqVoiceTap::WAVE : ScspHqVoiceTap::SAMPLE;
+      t->sample = p->sample;
+      t->att = p->att;
+   }
+   get_panning(slot->regs.dipan, &pan_l, &pan_r);
+   t->direct_vol[0] = muted ? 0 : scsp_hq_gain(get_sdl_shift(slot->regs.disdl), pan_l);
+   t->direct_vol[1] = muted ? 0 : scsp_hq_gain(get_sdl_shift(slot->regs.disdl), pan_r);
+   t->isel = slot->regs.isel;
+   t->imxl = muted ? 0 : slot->regs.imxl;
+   p->op1 = 0;
+   p->op2 = 0;
+   p->op5 = 0;
+}
+
+// After the mix: effect returns, external inputs and master volume; then the
+// rendered sample replaces the chip's.
+static void scsp_hq_finish_sample(struct Scsp * s, int rbp, int rbl, int mvol, s16 * out_l, s16 * out_r)
+{
+   int i;
+   for (i = 0; i < 32; i++)
+   {
+      ScspHqVoiceTap *t = &scsp_hq_taps.v[i];
+      int pan_l = 0, pan_r = 0;
+      if (i >= 18)
+      {
+         t->fx = 0;
+         t->effect_vol[0] = t->effect_vol[1] = 0;
+         continue;
+      }
+      t->fx = i < 16 ? scsp_dsp.efreg[i] : scsp_dsp.exts[i - 16];
+      get_panning(s->slots[i].regs.efpan, &pan_l, &pan_r);
+      t->effect_vol[0] = scsp_hq_gain(get_sdl_shift(s->slots[i].regs.efsdl), pan_l);
+      t->effect_vol[1] = scsp_hq_gain(get_sdl_shift(s->slots[i].regs.efsdl), pan_r);
+   }
+   scsp_hq_taps.master = (u16)(0x8000 >> (0xf - mvol));
+   scsp_hq_taps.exts[0] = scsp_dsp.exts[0];
+   scsp_hq_taps.exts[1] = scsp_dsp.exts[1];
+   if (scsp_hq_renderer->float_dsp)
+   {
+      scsp_hq_fill_dsp_view(rbp, rbl);
+      scsp_hq_taps.dsp = &scsp_hq_dsp_view;
+   }
+   else
+      scsp_hq_taps.dsp = NULL;
+
+   float f[2];
+   scsp_hq_renderer->render(scsp_hq_taps, SoundRam, f);
+   if (scsp_hq_taps.dsp != NULL && scsp_hq_fx_output_hook)
+   {
+      float fx_chip[2], fx_float[2];
+      scsp_hq_renderer->last_effect_mix(fx_chip, fx_float);
+      scsp_hq_fx_output_hook(fx_chip, fx_float);
+   }
+   if (scsp.dac18b != 0)
+   {
+      // the 18-bit DAC setting seen through 16 bits. The chip shifts the
+      // clipped s16 left by 2, which wraps above |8191|; here the shifted
+      // value is clipped instead, so the two differ only there.
+      f[0] *= 4.0f;
+      f[1] *= 4.0f;
+   }
+   const s16 chip_l = *out_l, chip_r = *out_r;
+   *out_l = scsp_hq_quantizer(f[0]);
+   *out_r = scsp_hq_quantizer(f[1]);
+   if (scsp_hq_chip_output_hook)
+      scsp_hq_chip_output_hook(chip_l, chip_r, *out_l, *out_r);
+}
+
 void generate_sample(struct Scsp * s, int rbp, int rbl, s16 * out_l, s16* out_r, int mvol, s16 cd_in_l, s16 cd_in_r)
 {
    int step_num = 0;
@@ -2214,11 +2607,23 @@ void generate_sample(struct Scsp * s, int rbp, int rbl, s16 * out_l, s16* out_r,
    // Per-sample counter (scsp3 SampleCounter), consumed by the op4 envelope generator.
    s->frame++;
 
+   const int hq_rec = scsp_hq_enabled.load(std::memory_order_acquire) && scsp_hq_renderer != NULL;
+   if (hq_rec)
+      scsp_hq_begin_sample();
+
    scsp_dsp.rbp = rbp;
    scsp_dsp.rbl = rbl;
 
    scsp_dsp.exts[0] = cd_in_l;
    scsp_dsp.exts[1] = cd_in_r;
+
+   if (hq_rec)
+   {
+      // what this sample's program runs with, for the float DSP
+      scsp_hq_dsp_mdec_ct = scsp_dsp.mdec_ct;
+      for (i = 0; i < 16; i++)
+         scsp_hq_taps.chip_mixs[i] = scsp_dsp.mixs[i];
+   }
 
    if (scsp_dsp.updated){
 
@@ -2249,10 +2654,19 @@ void generate_sample(struct Scsp * s, int rbp, int rbl, s16 * out_l, s16* out_r,
       int last_step = (step_num - 6) & 0x1f;
       int debug_muted = 0;
 
+      // Captures read the state each stage is about to use (op1 and op2 work
+      // on different slots, and op3 clocks the LFSR the op5 capture reads).
+      if (hq_rec)
+      {
+         scsp_hq_capture_op1(&s->slots[step_num]);
+         scsp_hq_capture_op2(&s->slots[(step_num - 1) & 0x1f]);
+      }
       op1(&s->slots[step_num]);//phase, pitch lfo
       op2(&s->slots[(step_num - 1) & 0x1f],s);//address pointer, modulation data read
       op3(&s->slots[(step_num - 2) & 0x1f]);//waveform dram read
       op4(&s->slots[(step_num - 3) & 0x1f]);//interpolation, eg, amplitude lfo
+      if (hq_rec)
+         scsp_hq_capture_op5(&s->slots[(step_num - 4) & 0x1f]);
       op5(&s->slots[(step_num - 4) & 0x1f]);//level calc 1
       op6(&s->slots[(step_num - 5) & 0x1f]);//level calc 2
       op7(&s->slots[(step_num - 6) & 0x1f],s);//sound stack write
@@ -2262,6 +2676,9 @@ void generate_sample(struct Scsp * s, int rbp, int rbl, s16 * out_l, s16* out_r,
          if (scsp_debug_instrument_check_is_muted(s->slots[last_step].regs.sa))
             debug_muted = 1;
       }
+
+      if (hq_rec)
+         scsp_hq_tap_slot(&s->slots[last_step], debug_muted);
 
       if (!debug_muted)
       {
@@ -2317,6 +2734,9 @@ void generate_sample(struct Scsp * s, int rbp, int rbl, s16 * out_l, s16* out_r,
      *out_l = *out_l << 2;
      *out_r = *out_r << 2;
    }
+
+   if (hq_rec)
+      scsp_hq_finish_sample(s, rbp, rbl, mvol, out_l, out_r);
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -2484,6 +2904,7 @@ scsp_dma (void)
         u16 val = scsp_r_w(from);
         //if (scsp.dmfl & 0x40) val = 0;
         T2WriteWord(SoundRam, to & 0x7FFFE, val);
+        scsp_hq_note_ram_write(to, 2);
         cache_update_external_write(0x05A00000 | (to & 0x7FFFF), val, 2);
         from += 2;
         to += 2;
@@ -5362,6 +5783,7 @@ c68k_byte_write (const u32 adr, u32 data)
     //}
     if (adr < 0x80000) {
       T2WriteByte(SoundRam, adr & 0x7FFFF, data);
+      scsp_hq_note_ram_write(adr, 1);
       // keep the SH2 caches coherent with sound-CPU writes
       cache_update_external_write(0x05A00000 | (adr & 0x7FFFF), data, 1);
     }
@@ -5399,6 +5821,7 @@ c68k_word_write (const u32 adr, u32 data)
 //    }
     if (adr < 0x80000) {
       T2WriteWord(SoundRam, adr & 0x7FFFE, data);
+      scsp_hq_note_ram_write(adr, 2);
       // keep the SH2 caches coherent with sound-CPU writes
       cache_update_external_write(0x05A00000 | (adr & 0x7FFFF), data, 2);
     }
@@ -5453,6 +5876,7 @@ static void Sh2SramFifoCommit(void)
     if (w->size == 1)      T2WriteByte(SoundRam, w->addr, (u8)w->val);
     else if (w->size == 2) T2WriteWord(SoundRam, w->addr, (u16)w->val);
     else                   T2WriteLong(SoundRam, w->addr, w->val);
+    scsp_hq_note_ram_write(w->addr, w->size);
     if (M68K) M68K->WriteNotify(w->addr, w->size);
   }
   sh2_sram_fifo_count = 0;
@@ -5546,6 +5970,7 @@ SoundRamWriteByte (u32 addr, u8 val)
   //SCSPLOG("SoundRamWriteByte %08X:%02X", addr, val);
   if (!Sh2SramStageWrite(addr, val, 1)) {
     T2WriteByte (SoundRam, addr, val);
+    scsp_hq_note_ram_write(addr, 1);
     M68K->WriteNotify (addr, 1);
   }
 }
@@ -5628,6 +6053,7 @@ SoundRamWriteWord (u32 addr, u16 val)
   addr &= ~1;
   if (!Sh2SramStageWrite(addr, val, 2)) {
     T2WriteWord (SoundRam, addr, val);
+    scsp_hq_note_ram_write(addr, 2);
     M68K->WriteNotify (addr, 2);
   }
   //SyncSh2And68k();
@@ -5677,6 +6103,7 @@ SoundRamWriteLong (u32 addr, u32 val)
   addr &= ~3;
   if (!Sh2SramStageWrite(addr, val, 4)) {
     T2WriteLong (SoundRam, addr, val);
+    scsp_hq_note_ram_write(addr, 4);
     M68K->WriteNotify (addr, 4);
   }
   //SyncSh2And68k();
@@ -5689,6 +6116,11 @@ int
 ScspInit (int coreid, int scsp_sync_count_per_frame, int scsp_main_mode )
 {
   int i;
+
+  // the high-quality output survives a re-init: rebuild its renderer here,
+  // before the SCSP thread exists
+  if (ScspGetHighQuality())
+    scsp_hq_create_renderer();
 
   if ((SoundRam = T2MemoryInit (0x80000)) == NULL)
     return -1;
@@ -5817,6 +6249,13 @@ ScspDeInit (void)
 #if defined(__SWITCH__)
   scsp_nx_sync_deinit();
 #endif
+  // The SCSP thread has stopped. The on/off setting is kept; ScspInit()
+  // builds a new renderer if it is on.
+  {
+    std::lock_guard<std::mutex> lock(scsp_hq_create_mutex);
+    delete scsp_hq_renderer;
+    scsp_hq_renderer = NULL;
+  }
 
   if (scspchannel[0].data32)
     free(scspchannel[0].data32);
@@ -7188,7 +7627,10 @@ SoundLoadState (FILE *fp, int version, int size)
   IOCheck_struct check = { 0, 0 };
 
   LOG("--------------- SoundLoadState ----------------");
-  
+
+  // the high-quality renderer's per-voice history belongs to the old timeline
+  scsp_hq_request_reset();
+
   // Drain the staged SH2 sound RAM burst FIFO before anything is restored.
   // Those writes belong to the pre-load timeline; left pending they would be
   // committed into the freshly loaded SoundRam and corrupt it.

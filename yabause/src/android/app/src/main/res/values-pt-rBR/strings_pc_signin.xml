@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pc_sign_in_title">Entrar</string>
+    <string name="pc_sign_in_google_title">Entrar com o Google</string>
+    <string name="pc_sign_in_google_description">No Google Play Games para PC, o login do Google é feito no navegador. Obtenha um código e digite-o na página do Google pelo PC ou pelo celular.</string>
+    <string name="pc_sign_in_get_code">Obter código de login</string>
+    <string name="pc_sign_in_step_open">1. Abra esta página em um navegador no PC ou no celular</string>
+    <string name="pc_sign_in_open_browser">Abrir no navegador</string>
+    <string name="pc_sign_in_step_enter">2. Digite este código e escolha sua conta do Google</string>
+    <string name="pc_sign_in_waiting">Aguardando você concluir no navegador…</string>
+    <string name="pc_sign_in_signing_in">Entrando…</string>
+    <string name="pc_sign_in_denied">O login foi cancelado no navegador.</string>
+    <string name="pc_sign_in_expired">O código expirou. Obtenha um novo código e tente de novo.</string>
+    <string name="pc_sign_in_failed">Falha ao entrar: %1$s</string>
+    <string name="pc_sign_in_new_code">Obter um novo código</string>
+    <string name="pc_sign_in_not_configured">O login com o Google não está disponível nesta versão.</string>
+    <string name="pc_sign_in_terms">Ao entrar, você concorda com os Termos de Uso (yabasanshiro.com/terms-of-use) e a Política de Privacidade (yabasanshiro.com/privacy).</string>
+</resources>

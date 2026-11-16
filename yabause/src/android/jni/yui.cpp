@@ -131,6 +131,9 @@ int g_CpuType = 2;
 int g_VideoFilter = 0;
 int g_PolygonGenerationMode = 0;
 static int g_SoundEngine = 0;
+// High-quality sound of the new SCSP (scsp.h). Kept here because the SCSP
+// settings are re-applied after every YabauseInit().
+static int g_SoundHighQuality = 0;
 static int g_resolution_mode = 0;
 static int g_rbg_resolution_mode = 0;
 static int g_extmemory = 1;
@@ -1586,6 +1589,25 @@ static void SetVideoSetting(int type, int value)
     VideoSetSetting(type, value);
 }
 
+// High-quality sound: the high-quality renderer plus the float effect DSP in
+// its normal mode (1), or both off. Only the new SCSP (use_new_scsp) renders
+// it. The SCSP keeps the setting across init, but it is applied again after
+// YabauseInit() so that no init path can lose it.
+static void ApplySoundHighQuality()
+{
+#ifndef USE_SCSP2
+    if (g_SoundHighQuality) {
+        ScspSetHighQualityFloatDsp(1);
+        ScspSetHighQuality(1);
+    } else {
+        ScspSetHighQuality(0);
+        ScspSetHighQualityFloatDsp(0);
+    }
+    printf("SoundHighQuality applied: hq=%d float_dsp=%d engine=%d\n",
+           ScspGetHighQuality(), ScspGetHighQualityFloatDsp(), g_SoundEngine);
+#endif
+}
+
 // Called on the emulation thread right after the video core is created.
 static void ApplyVideoSettings()
 {
@@ -1687,6 +1709,7 @@ int YabauseInit()
     // this point can finally be applied. Cores ignore settings they do not
     // implement.
     ApplyVideoSettings();
+    ApplySoundHighQuality();
 
     // Log game info to Crashlytics for crash diagnostics
     if (s_crashlytics_context != NULL) {
@@ -2009,12 +2032,24 @@ extern "C"
     Java_org_uoyabause_android_YabauseRunnable_setFilter(JNIEnv *env, jobject obj, jint filter)
     {
         g_VideoFilter = filter;
+        // Java may call this after the core exists (a disc swap re-reads the
+        // settings), and the core is also created later than Java's first
+        // call: go through SetVideoSetting() like the other video settings.
+        SetVideoSetting(VDP_SETTING_FILTERMODE, g_VideoFilter);
     }
 
     void
     Java_org_uoyabause_android_YabauseRunnable_setSoundEngine(JNIEnv *env, jobject obj, jint sound_engine)
     {
         g_SoundEngine = sound_engine;
+    }
+
+    void
+    Java_org_uoyabause_android_YabauseRunnable_setSoundHighQuality(JNIEnv *env, jobject obj, jint enable)
+    {
+        g_SoundHighQuality = enable ? 1 : 0;
+        // Safe on any thread, before or after the core exists.
+        ApplySoundHighQuality();
     }
 
     void

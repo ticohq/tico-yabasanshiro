@@ -56,6 +56,14 @@ public:
 
 	void resize(int w, int h);
 
+	// --vdp-dump developer mode (see Arguments.cpp). execEmulation() replays
+	// the dump instead of running the CPU; vdpDumpReady() turns true once the
+	// requested number of frames has been rendered, and the widget then saves
+	// the frame and quits.
+	static bool vdpDumpMode();
+	bool vdpDumpReady() const { return mVdpDumpError || mVdpDumpDone >= mVdpDumpFrames; }
+	bool vdpDumpFailed() const { return mVdpDumpError; }
+
 
 protected:
   static YabauseThread * instance;
@@ -65,7 +73,16 @@ protected:
 	bool mPause;
 	int mTimerId;
 	int mInit;
-	
+	QByteArray mVdpDumpPrefix;
+	int mVdpDumpFrames = 3;
+	int mVdpDumpDone = 0;
+	bool mVdpDumpError = false;
+	// --sound-test-events=S,L,R developer mode (see Arguments.cpp)
+	int mSoundTestFrame = 0;
+	void * mSoundTestState = nullptr;
+	size_t mSoundTestStateSize = 0;
+	void soundTestEvents();
+
 	void initEmulation();
 	void deInitEmulation();
 	void resetYabauseConf();

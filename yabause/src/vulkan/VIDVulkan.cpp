@@ -42,6 +42,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 #include "FsrUpscaler.h"
 #include "ygl_fsr.h"
 #include "Vdp2SpriteDecoder.h"
+#include "CrtPresenter.h"
 
 #include "Vdp2ColorCalcState.h"
 
@@ -379,6 +380,10 @@ void VIDVulkan::deInit(void) {
     vdp2GBuffer = nullptr;
   }
 
+  if (crtPresenter != nullptr) {
+    delete crtPresenter;   // waits for the queue
+    crtPresenter = nullptr;
+  }
   deleteOfscreenPath();
   freeSubRenderTarget();
 
@@ -459,17 +464,15 @@ void VIDVulkan::Vdp1DrawStart(void) {
     vdp1->setPolygonMode(polygonMode);
     Vdp1GroundShading::polygonMode = polygonMode;
     rebuildPipelines = 0;
+    // The VDP1 renderer's own factory caches last frame's pipelines. After a
+    // polygon mode switch they would be handed back with mismatched topology /
+    // shader stages (PATCH_LIST + tess vs TRIANGLE_LIST), drawing garbage or
+    // hanging the GPU. Drop them before drawStart(), which builds this
+    // frame's clip polygons with the new mode's pipelines.
+    vdp1->discardPipelines();
   }
 
   vdp1->drawStart();
-
-  // drawStart() recycles last frame's pipelines into the factory's
-  // garbage cache. After a polygon mode switch they would be handed
-  // back with mismatched topology / shader stages (PATCH_LIST + tess
-  // vs TRIANGLE_LIST), causing an Adreno GPU hang on the next draw.
-  if (rebuilding) {
-    pipleLineFactory->dicardAllPielines();
-  }
 }
 
 void VIDVulkan::Vdp1DrawEnd(void) { vdp1->drawEnd(); }
@@ -598,6 +601,13 @@ void VIDVulkan::Vdp2DrawStart(void) {
         acDiffFrames++;
     }
   }
+  if (crtReleasePending.exchange(false)) {
+    if (crtPresenter != nullptr) {
+      delete crtPresenter;   // waits for the queue
+      crtPresenter = nullptr;
+    }
+  }
+  applyEffectiveResolution();
   Vdp2SetResolution(fixVdp2Regs->TVMD);
   if (rebuildFrameBuffer) {
     LOGI("rebuild frame buffer");
@@ -605,7 +615,7 @@ void VIDVulkan::Vdp2DrawStart(void) {
     // createCommandPool();
     vdp1->changeResolution(renderWidth, renderHeight);
     vdp1->setVdp2Resolution(vdp2width, vdp2height);
-    windowRenderer->changeResolution(vdp2width, vdp2height, _renderer->getWindow()->GetPreTransFlag(), rotate_screen );
+    windowRenderer->changeResolution(vdp2width, vdp2height, _renderer->getWindow()->GetPreTransFlag(), coreRotateScreen() );
     {
       int fbScale = getComputeFbScale();
       generateOffscreenPath(vdp2width * fbScale, vdp2height * fbScale);
@@ -687,7 +697,65 @@ void VIDVulkan::Vdp2DrawStart(void) {
   vm->reset();
 }
 
+// CRT mode: the effective resolution follows the filter. Runs at the top of
+// a frame on the VDP thread, so a change goes through the frame buffer
+// rebuild below like a resolution change does. The size is recomputed
+// (SetSaturnResolution only does it for a new Saturn resolution), so
+// switching back gives exactly the user's own render size.
+void VIDVulkan::applyEffectiveResolution() {
+  const bool want = YGL_IS_CRT_MODE(filterMode) &&
+                    !(crtPresenter != nullptr && crtPresenter->unavailable(filterMode));
+  if (want == crtActive) return;
+  crtActive = want;
+  resolutionMode = want ? RES_ORIGINAL : userResolutionMode;
+  rbgResolutionMode = want ? RBG_RES_ORIGINAL : userRbgResolutionMode;
+  vdp2width = 0;   // Vdp2SetResolution recomputes the render size
+  vdp2height = 0;
+  rebuildFrameBuffer = 1;
+}
+
+// CRT mode: the picture in subRenderTarget (Saturn resolution, upright apart
+// from the swapchain pre-transform it was drawn with) through the shader into
+// the window, turned the way pre_rotate_mat turns the normal output.
+bool VIDVulkan::presentCrt(VkCommandBuffer commandBuffer, int ci, VkExtent2D framebufferSize,
+                           int pretransformFlag) {
+  if (crtPresenter == nullptr) crtPresenter = new CrtPresenter(this);
+  int preSteps = 0;   // quarter turns of pre_rotate_mat for the pre-transform
+  if (pretransformFlag & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR) preSteps = 1;
+  else if (pretransformFlag & VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR) preSteps = 3;
+  else if (pretransformFlag & VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR) preSteps = 2;
+  CrtPresenter::Source src;
+  src.view = subRenderTarget.color.view;
+  src.imageW = subRenderTarget.width;
+  src.imageH = subRenderTarget.height;
+  src.picW = renderWidth;
+  src.picH = renderHeight;
+  src.preSteps = preSteps;
+  // the field of this frame in double-density interlace: TVSTAT ODD of the
+  // frame's register snapshot
+  src.field = fixVdp2Regs ? ((fixVdp2Regs->TVSTAT >> 1) & 0x01) : 0;
+  CrtPresenter::Target dst;
+  dst.renderPass = _renderer->getWindow()->GetVulkanRenderPass();
+  dst.framebuffer = _renderer->getWindow()->GetVulkanActiveFramebuffer();
+  dst.image = _renderer->getWindow()->getCurrentImage();
+  dst.format = _renderer->getWindow()->getColorFormat();
+  dst.width = framebufferSize.width;
+  dst.height = framebufferSize.height;
+  // the dump mode's check of a turned swapchain: only the CRT pass turns
+  int lastSteps = preSteps;
+  if (crtTestPreSteps >= 0) lastSteps = crtTestPreSteps & 3;
+  // rotate_screen is glm::rotate(-90) = three quarter turns
+  dst.steps = ((rotate_screen ? 3 : 0) + lastSteps) & 3;
+  dst.displaySteps = lastSteps;
+  dst.rotated = rotate_screen ? 1 : 0;
+  dst.top = outputTop ? 1 : 0;
+  return crtPresenter->present(commandBuffer, ci, filterMode, src, dst);
+}
+
 void VIDVulkan::onSurfaceLost() {
+  // The CRT presenter's images are freed by the VDP thread at the top of its
+  // next frame (this may run on any thread).
+  crtReleasePending = true;
   if (_renderer == nullptr) return;
   Window *window = _renderer->getWindow();
   if (window == nullptr) return;
@@ -1093,7 +1161,7 @@ void VIDVulkan::compositeVdp2New(VkCommandBuffer commandBuffer, Vdp2 *regs,
   // rotate_screen (-90), then add the swapchain pre-transform angle.
   int pretransformFlag = _renderer->getWindow()->GetPreTransFlag();
   int rotSteps = 0;  // net CCW 90-degree steps (mod 4)
-  if (rotate_screen) rotSteps -= 1;  // glm rotate(-90), matching pre_rotate_mat
+  if (coreRotateScreen()) rotSteps -= 1;  // glm rotate(-90), matching pre_rotate_mat
   if (pretransformFlag & VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR) rotSteps += 1;
   else if (pretransformFlag & VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR) rotSteps += 3;
   else if (pretransformFlag & VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR) rotSteps += 2;
@@ -1735,6 +1803,7 @@ void VIDVulkan::Vdp2DrawEnd(void) {
     dropUnpresentableFrame();
     return;
   }
+  crtPresented = false;
 
   const auto fenceWaitStart = std::chrono::high_resolution_clock::now();
   ErrorCheck(vkWaitForFences(device, 1, &commandFence[ci], VK_TRUE, UINT64_MAX));
@@ -1992,7 +2061,7 @@ void VIDVulkan::Vdp2DrawEnd(void) {
     glm::mat4 pre_rotate_mat = glm::mat4(1.0f);
     glm::vec3 rotation_axis = glm::vec3(0.0f, 0.0f, 1.0f);
 
-    if (rotate_screen) {
+    if (coreRotateScreen()) {
       pre_rotate_mat = glm::rotate(pre_rotate_mat, glm::radians(-90.0f), glm::vec3(0.0f, 0.0f, 1.0f));
     }
 
@@ -2436,7 +2505,6 @@ void VIDVulkan::Vdp2DrawEnd(void) {
       render_pass_begin_info.renderArea = render_area;
       render_pass_begin_info.clearValueCount = clear_values.size();
       render_pass_begin_info.pClearValues = clear_values.data();
-      vkCmdBeginRenderPass(commandBuffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
       auto c = vk::CommandBuffer(commandBuffer);
       vk::Viewport viewport;
@@ -2447,15 +2515,23 @@ void VIDVulkan::Vdp2DrawEnd(void) {
       viewport.y = viewportData.y;
       viewport.minDepth = 0.0f;
       viewport.maxDepth = 1.0f;
-      c.setViewport(0, 1, &viewport);
       scissor.extent.width = viewportData.z;
       scissor.extent.height = viewportData.w;
       scissor.offset.x = viewportData.x;
       scissor.offset.y = viewportData.y;
-      c.setScissor(0, 1, &scissor);
-      vkCmdEndRenderPass(commandBuffer);
 
-      blitSubRenderTarget(commandBuffer, viewportData);
+      // CRT mode: the shader draws the whole window instead of the blit. If
+      // it cannot be used, this frame goes out through the blit and from the
+      // next one on the user's own settings are back (applyEffectiveResolution).
+      crtPresented = crtActive && presentCrt(commandBuffer, ci, render_area.extent, pretransformFlag);
+      if (!crtPresented) {
+        vkCmdBeginRenderPass(commandBuffer, &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+        c.setViewport(0, 1, &viewport);
+        c.setScissor(0, 1, &scissor);
+        vkCmdEndRenderPass(commandBuffer);
+
+        blitSubRenderTarget(commandBuffer, viewportData);
+      }
 
       render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
       render_pass_begin_info.renderPass = _renderer->getWindow()->GetVulkanKeepRenderPass();
@@ -2955,7 +3031,9 @@ void VIDVulkan::SetSettingValue(int type, int value) {
 
   switch (type) {
   case VDP_SETTING_FILTERMODE:
-    //_Ygl->aamode = value; ToDo
+    // Only the CRT modes change this renderer's output; they take effect at
+    // the top of the next frame (applyEffectiveResolution).
+    filterMode = value;
     break;
   case VDP_SETTING_ASPECT_RATE_MODE:
     if (aspect_rate_mode != value) {
@@ -2964,13 +3042,17 @@ void VIDVulkan::SetSettingValue(int type, int value) {
     }
     break;
   case VDP_SETTING_RESOLUTION_MODE:
-    if (resolutionMode != value) {
+    userResolutionMode = value;
+    // in CRT mode the effective value stays RES_ORIGINAL until it is off
+    if (!crtActive && resolutionMode != value) {
       resolutionMode = value;
       rebuildFrameBuffer = 1; // rebuild frame buffers at the top of frame
     }
     break;
   case VDP_SETTING_RBG_RESOLUTION_MODE:
-    rbgResolutionMode = value;
+    userRbgResolutionMode = value;
+    if (!crtActive)
+      rbgResolutionMode = value;
     break;
 
   case VDP_SETTING_RBG_USE_COMPUTESHADER:
@@ -3058,6 +3140,7 @@ void VIDVulkan::SetSaturnResolution(int width, int height) {
     if (deviceWidth != 0 && deviceHeight != 0) {
       originx = 0;
       originy = 0;
+      outputTop = false;
 
       if (aspect_rate_mode != FULL) {
 
@@ -3086,6 +3169,7 @@ void VIDVulkan::SetSaturnResolution(int width, int height) {
           if (isFullScreen) {
             if (deviceWidth < deviceHeight) {
 				      originy = 0; // deviceHeight - (deviceHeight - deviceWidth * wrate);
+              outputTop = true;
               renderHeight = deviceWidth * wrate;
               renderWidth = deviceWidth;
             } else {
@@ -3103,6 +3187,7 @@ void VIDVulkan::SetSaturnResolution(int width, int height) {
             if (deviceHeight > deviceWidth) {
               originy = 0; // deviceWidth * hrate; // deviceHeight; //
                            // -(deviceHeight - deviceWidth * hrate);
+              outputTop = true;
               renderHeight = deviceWidth * hrate;
               renderWidth = deviceWidth;
             } else {
@@ -6036,6 +6121,8 @@ void VIDVulkan::drawRotation_in(RBGDrawInfo *rbg) {
               continue; // may be faster than GPU
             }
       */
+      // RPMD=2: line colour code always comes from parameter A
+      vdp2rotationparameter_struct * lineparam = NULL;
       switch (fixVdp2Regs->RPMD | rgb_type) {
       case 0:
         parameter = &paraA;
@@ -6058,6 +6145,7 @@ void VIDVulkan::drawRotation_in(RBGDrawInfo *rbg) {
         }
         break;
       case 2:
+        lineparam = &paraA;
         if (!(paraA.coefenab)) {
           parameter = &paraA;
         } else {
@@ -6074,7 +6162,6 @@ void VIDVulkan::drawRotation_in(RBGDrawInfo *rbg) {
           } else {
             parameter = &paraA;
             if (vdp2rGetKValue(parameter, i) == 0) {
-              paraB.lineaddr = paraA.lineaddr;
               parameter = &paraB;
             } else {
               int a = 0;
@@ -6285,8 +6372,9 @@ void VIDVulkan::drawRotation_in(RBGDrawInfo *rbg) {
       if (info->LineColorBase != 0 && VDP2_CC_NONE != (info->blendmode & 0x03)) {
         if ((color & 0xFF000000) != 0) {
           color |= 0x8000;
-          if (parameter->linecoefenab && parameter->lineaddr != 0xFFFFFFFF && parameter->lineaddr != 0x000000) {
-            color |= ((parameter->lineaddr & 0x7F) | 0x80) << 16;
+          vdp2rotationparameter_struct * lp = lineparam ? lineparam : parameter;
+          if (lp->linecoefenab && lp->lineaddr != 0xFFFFFFFF && lp->lineaddr != 0x000000) {
+            color |= ((lp->lineaddr & 0x7F) | 0x80) << 16;
           }
         }
       }
@@ -8504,7 +8592,7 @@ void VIDVulkan::renderWithLineEffectToMainTarget(VdpPipeline *p, VkCommandBuffer
     render_area.extent.height = _renderer->getWindow()->GetVulkanSurfaceSize().height;
   }
 
-  if (rotate_screen) {
+  if (coreRotateScreen()) {
 	  switch (ubomini.u_dir) {
 	  case 0:
 		  ubomini.u_dir = 2; //270
@@ -9104,21 +9192,30 @@ void VIDVulkan::getScreenshot(void ** outbuf, int & width, int & height)
   int deviceHeight = _renderer->getWindow()->GetVulkanSurfaceSize().height;
   int deviceOriginX = originx;
   int deviceOriginY = originy;
-    
+  // the presented picture: the render area, or in CRT mode the whole window
+  // (the shader draws all of it)
+  int shotWidth = renderWidth;
+  int shotHeight = renderHeight;
+  if (crtPresented) {
+    shotWidth = deviceWidth;
+    shotHeight = deviceHeight;
+    deviceOriginX = 0;
+    deviceOriginY = 0;
+  }
 
   switch (pretransformFlag) {
       case VK_SURFACE_TRANSFORM_ROTATE_90_BIT_KHR:
-        viewportData = {deviceHeight - renderHeight - deviceOriginY, deviceOriginX, renderHeight, renderWidth};
+        viewportData = {deviceHeight - shotHeight - deviceOriginY, deviceOriginX, shotHeight, shotWidth};
         break;
       case VK_SURFACE_TRANSFORM_ROTATE_270_BIT_KHR:
-        viewportData = {deviceOriginY, deviceWidth - renderWidth - deviceOriginX, renderHeight, renderWidth};
+        viewportData = {deviceOriginY, deviceWidth - shotWidth - deviceOriginX, shotHeight, shotWidth};
         break;
       case VK_SURFACE_TRANSFORM_ROTATE_180_BIT_KHR:
-        viewportData = {deviceHeight - renderWidth - deviceOriginX, deviceWidth - renderHeight - deviceOriginY, renderWidth,
-                        renderHeight};
+        viewportData = {deviceHeight - shotWidth - deviceOriginX, deviceWidth - shotHeight - deviceOriginY, shotWidth,
+                        shotHeight};
         break;
       default:
-        viewportData = {deviceOriginX, deviceOriginY, renderWidth, renderHeight};
+        viewportData = {deviceOriginX, deviceOriginY, shotWidth, shotHeight};
         break;
     }
 
@@ -9298,8 +9395,8 @@ void VIDVulkan::getScreenshot(void ** outbuf, int & width, int & height)
     data = staging;
   }
 
-  width = renderWidth;
-  height = renderHeight;
+  width = shotWidth;
+  height = shotHeight;
 
   ts_map = shotNow();
 

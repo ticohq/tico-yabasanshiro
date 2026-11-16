@@ -62,6 +62,14 @@
         app:defaultValue="0" />
 
     <ListPreference
+        app:key="pref_filter"
+        app:title="@string/video_filter"
+        app:dialogTitle="@string/choose_video_filter"
+        app:entries="@array/entries_video_filte_list_preference"
+        app:entryValues="@array/entryvalues_video_filte_list_preference"
+        app:defaultValue="0" />
+
+    <ListPreference
         app:key="pref_aspect_rate"
         app:title="@string/video_aspect_ratio"
         app:dialogTitle="@string/choose_video_aspect_ratio"

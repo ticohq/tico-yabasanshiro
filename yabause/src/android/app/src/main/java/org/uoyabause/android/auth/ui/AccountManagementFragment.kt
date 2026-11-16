@@ -1029,7 +1029,7 @@ class AccountManagementFragment : Fragment() {
                     ),
                 ).build()
 
-        signInLauncher.launch(signInIntent)
+        signInLauncher.launch(PcSignInActivity.wrap(requireContext(), signInIntent))
     }
 
     private fun setupAccountActionsClickListeners() {
@@ -1186,7 +1186,7 @@ class AccountManagementFragment : Fragment() {
                     ),
                 ).build()
 
-        signInLauncher.launch(signInIntent)
+        signInLauncher.launch(PcSignInActivity.wrap(requireContext(), signInIntent))
     }
 
     private fun formatLastLoginTime(lastLoginTimeMillis: Long?): String = try {

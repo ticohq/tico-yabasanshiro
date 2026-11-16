@@ -304,6 +304,12 @@ class GameSelectFragmentPhone :
         updateGameList(3)
     }
 
+    override fun getImportPresenter(): GameSelectPresenter? = presenter
+
+    override fun onGamesInstalled() {
+        updateGameList(3)
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,

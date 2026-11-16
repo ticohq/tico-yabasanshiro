@@ -88,6 +88,7 @@ protected:
 	void refreshSaveList();
   BackupManager * backupman_;
   vector<BackupItem> cloud_items;
+  void applyCloudItems(const std::vector<BackupItem> &items);
 
   // upload data
   DatabaseReference new_post;

@@ -243,8 +243,10 @@ UIYabause::UIYabause( QWidget* parent )
 	connect( mouseCursorTimer, SIGNAL( timeout() ), this, SLOT( cursorRestore() ));
 	connect( mYabauseThread, SIGNAL( toggleEmulateMouse( bool ) ), this, SLOT( toggleEmulateMouse( bool ) ) );
 
-	connect(this, SIGNAL(windowWasShown()), this, SLOT(initWinSparkle()),
-		Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
+	// A --vdp-dump run must not open the update dialog.
+	if (!YabauseThread::vdpDumpMode())
+		connect(this, SIGNAL(windowWasShown()), this, SLOT(initWinSparkle()),
+			Qt::ConnectionType(Qt::QueuedConnection | Qt::UniqueConnection));
 
   //connect(this, SIGNAL(setStateFileLoaded(std::string)), this, SLOT(onStateFileLoaded(std::string)));
 
@@ -1183,6 +1185,25 @@ void UIYabause::on_aFileSettings_triggered()
       if (newhash["Sound/NewScsp"].toBool() != hash["Sound/NewScsp"])
          scsp_set_use_new(newhash["Sound/NewScsp"].toInt());
 
+#ifndef USE_SCSP2
+		// High-quality sound: safe to switch while a game runs (the renderer is
+		// built here, on this thread). The float DSP follows the setting.
+		if (settingAsBool(newhash["Sound/HighQuality"]) != settingAsBool(hash["Sound/HighQuality"]))
+		{
+			const int hq = settingAsBool(newhash["Sound/HighQuality"]);
+			if (hq)
+			{
+				ScspSetHighQualityFloatDsp(1);
+				ScspSetHighQuality(1);
+			}
+			else
+			{
+				ScspSetHighQuality(0);
+				ScspSetHighQualityFloatDsp(0);
+			}
+		}
+#endif
+
 		if (newhash["Video/WindowWidth"] != hash["Video/WindowWidth"] || newhash["Video/WindowHeight"] != hash["Video/WindowHeight"] ||
           newhash["View/Menubar"] != hash["View/Menubar"] || newhash["View/Toolbar"] != hash["View/Toolbar"] || 
           newhash["Input/GunMouseSensitivity"] != hash["Input/GunMouseSensitivity"])
@@ -1195,6 +1216,10 @@ void UIYabause::on_aFileSettings_triggered()
 
     if (newhash["Video/rbg_resolution_mode"] != hash["Video/rbg_resolution_mode"]) {
       VideoSetSetting(VDP_SETTING_RBG_RESOLUTION_MODE, newhash["Video/rbg_resolution_mode"].toInt());
+    }
+
+    if (newhash["Video/filter_mode"] != hash["Video/filter_mode"]) {
+      VideoSetSetting(VDP_SETTING_FILTERMODE, newhash["Video/filter_mode"].toInt());
     }
 
 	if (newhash["Video/UseComputeShader"] != hash["Video/UseComputeShader"]) {

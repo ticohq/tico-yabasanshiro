@@ -21,7 +21,7 @@ object Log {
 
 class DiscordWebhookTest {
     // テスト用のWebhook URL（両方のテストで共通利用）
-    private val testWebhookUrl = "https://discord.com/api/webhooks/1367502162598432831/DqqAqBP9wirCDBn1QL24HSup8VM3vHKD2RqohtRnOPJpTG7KNcBoarmRmNtSLnOan700"
+    private val testWebhookUrl = "YOUR_DISCORD_WEBHOOK_URL_HERE"
 
     @Test
     fun testSendMessage() =

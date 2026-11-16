@@ -105,3 +105,17 @@
 # Android Gradle plugin generated rules
 -dontwarn android.media.LoudnessCodecController$OnLoudnessCodecUpdateListener
 -dontwarn android.media.LoudnessCodecController
+
+# SMB client (smbj): optional Kerberos / GSS / JNDI classes are not on Android
+-dontwarn org.ietf.jgss.**
+-dontwarn javax.security.auth.kerberos.**
+-dontwarn javax.el.**
+-dontwarn sun.security.**
+-dontwarn org.slf4j.**
+-dontwarn org.bouncycastle.**
+-keep class com.hierynomus.** { *; }
+# The mbassador artifact's package is net.engio.mbassy (not ...mbassador). It
+# finds @Handler methods and instantiates its dispatchers by reflection, so R8
+# renaming it made every smbj event publish fail with MessageBusException.
+-keep class net.engio.mbassy.** { *; }
+-keep class com.hierynomus.security.bc.** { *; }

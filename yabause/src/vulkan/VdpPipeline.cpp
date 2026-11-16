@@ -39,8 +39,8 @@ const int VdpPipeline::bindIdFbo = 2;
 const int VdpPipeline::bindIdLine = 3;
 const int VdpPipeline::bindIdWindow = 4;
 
-VkShaderModule ShaderManager::getShader(uint32_t id) {
-    auto it = shaders.find(id);
+VkShaderModule ShaderManager::getShader(uint32_t id, const string & code) {
+    auto it = shaders.find(std::make_pair(id, std::hash<std::string>()(code)));
     if (it == shaders.end()) {
       return 0; // not found
     }
@@ -48,9 +48,10 @@ VkShaderModule ShaderManager::getShader(uint32_t id) {
 }
 
 ShaderManager::~ShaderManager() {
-  // `shaders` is keyed by (prgid | shaderKind << 16), plus a 0x40000000-tagged
-  // key for the issue #22 G-buffer fragment variants (see createGraphicsPipeline).
-  // That key space is sparse -- it is never a dense 0..size-1 range.
+  // `shaders` is keyed by ((prgid | shaderKind << 16), hash of the source),
+  // with a 0x40000000-tagged id for the issue #22 G-buffer fragment variants
+  // (see createGraphicsPipeline). That key space is sparse -- it is never a
+  // dense 0..size-1 range.
   //
   // The previous loop walked it as `for (int i = 0; i < shaders.size(); i++)
   // vkDestroyShaderModule(device, shaders[i], nullptr)`. map::operator[] INSERTS
@@ -156,7 +157,7 @@ VkShaderModule ShaderManager::compileShader(uint32_t id, const string & code, in
     if (vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS) {
       throw std::runtime_error("failed to create shader module!");
     }
-    shaders[id] = shaderModule;
+    shaders[std::make_pair(id, std::hash<std::string>()(code))] = shaderModule;
     return shaderModule;
 }
 
@@ -412,7 +413,7 @@ std::string VdpPipeline::get_shader_header() {
 
 VkShaderModule VdpPipeline::compileShader(const string & code, int type) {
   ShaderManager * sm = ShaderManager::getInstance();
-  VkShaderModule shaderModule = sm->getShader(prgid | (type << 16));
+  VkShaderModule shaderModule = sm->getShader(prgid | (type << 16), code);
   if (shaderModule == 0) {
     sm->setVulkan(vulkan);
     shaderModule = sm->compileShader(prgid | (type << 16), code, type);
@@ -493,7 +494,7 @@ void VdpPipeline::createGraphicsPipeline() {
     std::string gbFrag = injectGBufferWindow(injectGBufferAttrOutput(fragShaderName));
     ShaderManager * sm = ShaderManager::getInstance();
     uint32_t gbKey = (prgid | (shaderc_fragment_shader << 16)) ^ 0x40000000u;
-    _fragShaderModule = sm->getShader(gbKey);
+    _fragShaderModule = sm->getShader(gbKey, gbFrag);
     if (_fragShaderModule == 0) {
       sm->setVulkan(vulkan);
       _fragShaderModule = sm->compileShader(gbKey, gbFrag, shaderc_fragment_shader);
@@ -2351,6 +2352,54 @@ void VdpPipelineWindow::createDpethStencil(VkPipelineDepthStencilStateCreateInfo
 
 int Vdp1GroundShading::polygonMode = PERSPECTIVE_CORRECTION;
 
+// Texture address helper for the VDP1 sprite fragment shaders. Outside the
+// GPU tessellation mode it is the usual projective s/q, t/q. In that mode the
+// vertex data of a textured sprite (Vdp1Renderer::genPolygon) carries the
+// atlas row of texture row 0 in t, the line parameter in r and packed
+// constants in q (vdp1texrow.h vdp1_tess_pack); the geometry shader forwards
+// t and q unchanged as v_texrow, and the row is the hardware's: line
+// k = roundEven(r) of dmax + 1 lines takes row vdp1TexRow(k, dmax + 1, ...).
+// vdp1TexRow must match vdp1texrow.h::vdp1_tex_row and the compute copies.
+static std::string vdp1SpriteAddrGlsl() {
+  std::string s;
+  if (Vdp1GroundShading::polygonMode == GPU_TESSERATION) {
+    s += "#define VDP1_TESS_ROW 1\n";
+  }
+  s += R"S(
+#ifdef VDP1_TESS_ROW
+    layout(location = 2) flat in vec2 v_texrow;
+    int vdp1TexRow(int k, int n, int t0, int t1) {
+        int dt = t1 - t0;
+        int adt = abs(dt);
+        int rev = dt < 0 ? 1 : 0;
+        int inc; int adj; int e;
+        if (n <= adt) { inc = 2 * (adt + 1); adj = 2 * n;       e = adt + 1 - (2 * n + rev); }
+        else          { inc = 2 * adt;       adj = 2 * (n - 1); e = n - (2 * n - rev); }
+        e += k * inc;
+        int m = (e >= 0 && adj != 0) ? e / adj + 1 : 0;
+        return rev != 0 ? t0 - m : t0 + m;
+    }
+#endif
+    vec2 vdp1SpriteAddr(vec4 tc, ivec2 texSize) {
+#ifdef VDP1_TESS_ROW
+      if (v_texrow.y < 0.0) {
+        int p = int(-v_texrow.y + 0.5) - 1;
+        int dmax = p & 0xFFF;
+        int adt = (p >> 12) & 0xFF;
+        int t0 = int(v_texrow.x + 0.5);
+        int t1 = t0 + adt;
+        if (((p >> 20) & 1) != 0) { t1 = t0; t0 = t0 + adt; }
+        int k = clamp(int(roundEven(tc.z)), 0, dmax);
+        int row = vdp1TexRow(k, dmax + 1, t0, t1);
+        return vec2(tc.s, (float(row) + 0.5) / float(texSize.y));
+      }
+#endif
+      return vec2(tc.s / tc.q, tc.t / tc.q);
+    }
+)S";
+  return s;
+}
+
 void Vdp1GroundShading::createColorAttachment(VkPipelineColorBlendAttachmentState & color) {
   color.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
   color.blendEnable = VK_FALSE;
@@ -2492,12 +2541,15 @@ Vdp1GroundShading::Vdp1GroundShading(VIDVulkan * vulkan, TextureManager * tm, Ve
    layout (location = 0) out vec4 v_position; 
    layout (location = 1) out vec4 v_texcoord; 
    layout (location = 2) out vec4 v_vtxcolor;
-   void main() {              
+   // Raw t and q for the texture row selection (see vdp1SpriteAddrGlsl).
+   layout (location = 3) out vec2 v_texrowv;
+   void main() {           
       v_position  = a_position; 
       v_vtxcolor  = a_grcolor;  
       v_texcoord  = a_texcoord; 
       v_texcoord.x  = v_texcoord.x / u_texsize.x; 
       v_texcoord.y  = v_texcoord.y / u_texsize.y;
+      v_texrowv   = a_texcoord.yw;
     }
   )S";
 
@@ -2517,13 +2569,16 @@ Vdp1GroundShading::Vdp1GroundShading(VIDVulkan * vulkan, TextureManager * tm, Ve
     layout (location = 0) in vec4 v_position[];
     layout (location = 1) in vec4 v_texcoord[];
     layout (location = 2) in vec4 v_vtxcolor[];
+    layout (location = 3) in vec2 v_texrowv[];
     layout (location = 0) out vec4 tcPosition[];
     layout (location = 1) out vec4 tcTexCoord[];
     layout (location = 2) out vec4 tcColor[];
+    layout (location = 3) out vec2 tcTexRow[];
     #define ID gl_InvocationID
     void main() 
     { 
       tcPosition[ID] = v_position[ID];
+      tcTexRow[ID] = v_texrowv[ID];
     	tcTexCoord[ID] = v_texcoord[ID];
     	tcColor[ID] = v_vtxcolor[ID]; 
     	if (ID == 0) {
@@ -2553,8 +2608,10 @@ Vdp1GroundShading::Vdp1GroundShading(VIDVulkan * vulkan, TextureManager * tm, Ve
     layout (location = 0) in vec4 tcPosition[];
     layout (location = 1) in vec4 tcTexCoord[];
     layout (location = 2) in vec4 tcColor[];
+    layout (location = 3) in vec2 tcTexRow[];
     layout (location = 0) out vec4 teTexCoord;
     layout (location = 1) out vec4 teColor;
+    layout (location = 2) out vec2 teTexRow;
     void main()
     {
   	  float u = gl_TessCoord.x, v = gl_TessCoord.y;
@@ -2569,6 +2626,8 @@ Vdp1GroundShading::Vdp1GroundShading(VIDVulkan * vulkan, TextureManager * tm, Ve
   	  vec4 ca = mix(tcColor[0], tcColor[3], u);
   	  vec4 cb = mix(tcColor[1], tcColor[2], u);
   	  teColor = mix(ca, cb, v);
+      // Per-sprite constants: copied, never interpolated.
+      teTexRow = tcTexRow[0];
     }
   )S";
 
@@ -2588,18 +2647,23 @@ Vdp1GroundShading::Vdp1GroundShading(VIDVulkan * vulkan, TextureManager * tm, Ve
     layout(triangle_strip, max_vertices = 3) out;
     layout(location = 0) in vec4 teTexCoord[3];
     layout(location = 1) in vec4 teColor[3];
+    layout(location = 2) in vec2 teTexRow[3];
     layout(location = 0) out vec4 v_texcoord;
     layout(location = 1) out vec4 v_vtxcolor;
+    layout(location = 2) flat out vec2 v_texrow;
     void main()
     { 
   	  v_texcoord = teTexCoord[0];
   	  v_vtxcolor = teColor[0];
+  	  v_texrow = teTexRow[0];
   	  gl_Position = gl_in[0].gl_Position; EmitVertex();
   	  v_texcoord = teTexCoord[1];
   	  v_vtxcolor = teColor[1];
+  	  v_texrow = teTexRow[1];
   	  gl_Position = gl_in[1].gl_Position; EmitVertex();
   	  v_texcoord = teTexCoord[2];
   	  v_vtxcolor = teColor[2];
+  	  v_texrow = teTexRow[2];
   	  gl_Position = gl_in[2].gl_Position; EmitVertex();
   	  EndPrimitive();
     } 
@@ -2610,7 +2674,7 @@ Vdp1GroundShading::Vdp1GroundShading(VIDVulkan * vulkan, TextureManager * tm, Ve
   bindid.clear();
   bindid.push_back(bindIdTexture);
 
-  fragShaderName = R"S(
+  fragShaderName = vdp1SpriteAddrGlsl() + R"S(
     layout(binding = 1) uniform sampler2D u_sprite;
     layout(location = 0) in vec4 v_texcoord;
     layout(location = 1) in vec4 v_vtxcolor;
@@ -2618,9 +2682,7 @@ Vdp1GroundShading::Vdp1GroundShading(VIDVulkan * vulkan, TextureManager * tm, Ve
 
     void main() { 
 
-      vec2 addr = v_texcoord.st;
-      addr.s = addr.s / (v_texcoord.q);
-      addr.t = addr.t / (v_texcoord.q);
+      vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));
       vec4 spriteColor = texture(u_sprite,addr);
       if( spriteColor.a == 0.0 ) discard; 
       fragColor = spriteColor+v_vtxcolor;
@@ -2644,7 +2706,7 @@ Vdp1GroundShadingSpd::Vdp1GroundShadingSpd(VIDVulkan * vulkan, TextureManager * 
   bindid.clear();
   bindid.push_back(bindIdTexture);
 
-  fragShaderName = R"S(
+  fragShaderName = vdp1SpriteAddrGlsl() + R"S(
     layout(binding = 1) uniform sampler2D u_sprite;
     layout(location = 0) in vec4 v_texcoord;
     layout(location = 1) in vec4 v_vtxcolor;
@@ -2652,9 +2714,7 @@ Vdp1GroundShadingSpd::Vdp1GroundShadingSpd(VIDVulkan * vulkan, TextureManager * 
 
     void main() { 
 
-      vec2 addr = v_texcoord.st;
-      addr.s = addr.s / (v_texcoord.q);
-      addr.t = addr.t / (v_texcoord.q);
+      vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));
       vec4 spriteColor = texture(u_sprite,addr);
       fragColor = spriteColor;
       fragColor = clamp(spriteColor+v_vtxcolor,vec4(0.0),vec4(1.0));
@@ -2683,16 +2743,14 @@ VDP1Mesh::VDP1Mesh(VIDVulkan * vulkan, TextureManager * tm, VertexManager * vm) 
   bindid.clear();
   bindid.push_back(bindIdTexture);
 
-  fragShaderName = R"S(
+  fragShaderName = vdp1SpriteAddrGlsl() + R"S(
     layout(binding = 1) uniform sampler2D u_sprite;
     layout(location = 0) in vec4 v_texcoord;
     layout(location = 1) in vec4 v_vtxcolor;
     layout(location = 0) out vec4 fragColor;
 
     void main() {                                                                                
-      vec2 addr = v_texcoord.st;
-      addr.s = addr.s / (v_texcoord.q);
-      addr.t = addr.t / (v_texcoord.q);
+      vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));
       vec4 spriteColor = texture(u_sprite,addr);
       if( spriteColor.a == 0.0 ) discard;
       if( (int(gl_FragCoord.y) & 0x01) == 0 ){
@@ -2734,7 +2792,7 @@ VDP1HalfLuminance::VDP1HalfLuminance(VIDVulkan * vulkan, TextureManager * tm, Ve
   bindid.push_back(bindIdFbo);
 
 
-  fragShaderName = R"S(
+  fragShaderName = vdp1SpriteAddrGlsl() + R"S(
     precision highp float;
     precision highp sampler2D;
     layout(binding = 0) uniform UniformBufferObject {
@@ -2750,9 +2808,7 @@ VDP1HalfLuminance::VDP1HalfLuminance(VIDVulkan * vulkan, TextureManager * tm, Ve
     layout(location = 0) out vec4 fragColor;
 
     void main() {                                                                                
-      vec2 addr = v_texcoord.st;
-      addr.s = addr.s / (v_texcoord.q);
-      addr.t = addr.t / (v_texcoord.q);
+      vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));
       vec4 FragColor = texture( u_sprite, addr ); 
       if( FragColor.a == 0.0 ) discard; 
       fragColor.r = FragColor.r * 0.5;
@@ -2786,7 +2842,7 @@ VDP1Shadow::VDP1Shadow(VIDVulkan * vulkan, TextureManager * tm, VertexManager * 
   bindid.push_back(bindIdTexture);
   bindid.push_back(bindIdFbo);
 
-  fragShaderName = R"S(
+  fragShaderName = vdp1SpriteAddrGlsl() + R"S(
     precision highp float;
     precision highp sampler2D;
     layout(binding = 0) uniform UniformBufferObject {
@@ -2802,10 +2858,8 @@ VDP1Shadow::VDP1Shadow(VIDVulkan * vulkan, TextureManager * tm, VertexManager * 
     layout(location = 0) out vec4 fragColor;
 
     void main() {                                                                                
-      vec2 addr = v_texcoord.st;
+      vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));
       vec2 faddr = vec2( gl_FragCoord.x/float(u_fbowidth), gl_FragCoord.y/float(u_fbohegiht));
-      addr.s = addr.s / (v_texcoord.q);
-      addr.t = addr.t / (v_texcoord.q);
       vec4 spriteColor = texture(u_sprite,addr);
       if( spriteColor.a == 0.0 ){ discard; }
       vec4 fboColor = texture(u_fbo,faddr);
@@ -2842,7 +2896,7 @@ VDP1GlowShadingAndHalfTransOperation::VDP1GlowShadingAndHalfTransOperation(VIDVu
   bindid.push_back(bindIdTexture);
   bindid.push_back(bindIdFbo);
 
-  fragShaderName = R"S(
+  fragShaderName = vdp1SpriteAddrGlsl() + R"S(
     precision highp float;
     precision highp sampler2D;
     layout(binding = 0) uniform UniformBufferObject {
@@ -2857,10 +2911,8 @@ VDP1GlowShadingAndHalfTransOperation::VDP1GlowShadingAndHalfTransOperation(VIDVu
     layout(location = 1) in vec4 v_vtxcolor;
     layout(location = 0) out vec4 fragColor;
     void main() { 
-      vec2 addr = v_texcoord.st;                                                               
+      vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));
       vec2 faddr = vec2( gl_FragCoord.x/float(u_fbowidth), gl_FragCoord.y/float(u_fbohegiht));
-      addr.s = addr.s / (v_texcoord.q);
-      addr.t = addr.t / (v_texcoord.q);
       vec4 spriteColor = texture(u_sprite,addr);
       if( spriteColor.a == 0.0 ) discard;
       vec4 fboColor    = texture(u_fbo,faddr);

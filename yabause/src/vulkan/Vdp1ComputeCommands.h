@@ -86,7 +86,7 @@
 //   offset124: vdp2Attrs   (uint,  4B)  F18: bits 0:15 normalShadow / 16:31 attrFlags
 //   offset128: priority    (uint,  4B)  F18: VDP2 sprite priority slot index 0-7
 //   offset132: colorcl     (uint,  4B)  F18: VDP2 color-calc slot index 0-7
-//   offset136: pad6        (uint,  4B)
+//   offset136: lineSteps   (uint,  4B)  sprites: bits 0..15 dmax, bits 16..31 A->B length
 //   offset140: pad7        (uint,  4B)  pads std430 array stride to a 16B multiple
 //   total = 144 bytes (16-byte aligned, std430 array stride 144B)
 struct Vdp1Cmd {
@@ -113,7 +113,11 @@ struct Vdp1Cmd {
     uint  vdp2Attrs;
     uint  priority;     // F18: VDP2 sprite priority slot index 0-7
     uint  colorcl;      // F18: VDP2 color-calc slot index 0-7
-    uint  pad6;
+    // Sprites only: bits 0..15 = dmax (the command is drawn as dmax + 1
+    // textured lines), bits 16..31 = Chebyshev length of A->B. Both come
+    // from the raw Saturn vertices (vdp1c::packSpriteSteps); the shaders
+    // read them instead of deriving them from the scaled fb vertices.
+    uint  lineSteps;
     uint  pad7;         // pads std430 array stride to a 16B multiple (= 144)
 };
 

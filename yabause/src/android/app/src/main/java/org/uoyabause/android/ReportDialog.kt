@@ -61,6 +61,7 @@ import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import org.devmiyax.yabasanshiro.R
 import org.uoyabause.android.auth.AuthState
+import org.uoyabause.android.auth.ui.PcSignInActivity
 import java.io.File
 
 class ReportDialog(
@@ -686,7 +687,7 @@ class ReportDialog(
                         AuthUI.IdpConfig.AppleBuilder().build(),
                     ),
                 ).build()
-        signInLauncher.launch(signInIntent)
+        signInLauncher.launch(PcSignInActivity.wrap(requireContext(), signInIntent))
     }
 
     private fun signInAnonymouslyThenSubmit() {

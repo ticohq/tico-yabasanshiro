@@ -31,6 +31,7 @@ import com.firebase.ui.auth.AuthUI.IdpConfig.GoogleBuilder
 import com.google.firebase.database.DatabaseReference
 import org.devmiyax.yabasanshiro.R
 import org.uoyabause.android.auth.AuthState
+import org.uoyabause.android.auth.ui.PcSignInActivity
 import java.util.Arrays
 
 /**
@@ -100,7 +101,7 @@ abstract class BaseCheatItemFragment : Fragment() {
                             AppleBuilder().build(),
                         ),
                     ).build()
-            signInLauncher.launch(signInIntent)
+            signInLauncher.launch(PcSignInActivity.wrap(requireContext(), signInIntent))
         }
     }
 

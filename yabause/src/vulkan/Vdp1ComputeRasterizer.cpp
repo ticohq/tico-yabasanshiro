@@ -115,7 +115,7 @@ struct Vdp1Cmd {
     uint  vdp2Attrs;    // F18
     uint  priority;     // F18
     uint  colorcl;      // F18
-    uint  pad6;
+    uint  lineSteps;     // bits 0..15 dmax, bits 16..31 A->B length (raw Saturn)
     uint  pad7;
 };
 
@@ -238,7 +238,7 @@ struct Vdp1Cmd {
     uint  vdp2Attrs;    // F18: bits 0:15 normalShadow, 16:31 attrFlags
     uint  priority;     // F18
     uint  colorcl;      // F18
-    uint  pad6;
+    uint  lineSteps;     // bits 0..15 dmax, bits 16..31 A->B length (raw Saturn)
     uint  pad7;
 };
 
@@ -436,10 +436,9 @@ vec4 packShadowWithPri(uint priority, Vdp1Cmd cmd) {
 // state would break per-pixel parallelism. See vidsoft.c:2566 for cm-by-cm
 // reference values; cm=3 here uses 0x7F (the actual 7-bit mask) so the check
 // can ever fire (vidsoft's 0xFF was dead code due to Pattern128 masking).
-vec4 sample16bppRGB(Vdp1Cmd cmd, vec2 uv, bool spd, bool endcEnabled) {
+vec4 sample16bppRGB(Vdp1Cmd cmd, vec2 uv, uint v, bool spd, bool endcEnabled) {
     uvec2 charSize = cmd.charSize;
     uint u = uint(clamp(uv.x * float(charSize.x), 0.0, float(charSize.x) - 1.0));
-    uint v = uint(clamp(uv.y * float(charSize.y), 0.0, float(charSize.y) - 1.0));
     if (endcEnabled) {
         uint endcnt = 0u;
         // Word-cached scan: 2 consecutive 16bpp texels share a 32-bit VRAM word.
@@ -488,10 +487,9 @@ vec4 sample16bppRGB(Vdp1Cmd cmd, vec2 uv, bool spd, bool endcEnabled) {
 }
 )GLSL"
 R"GLSL(
-vec4 sample4bppBank(Vdp1Cmd cmd, vec2 uv, uint colorBank, bool spd, bool endcEnabled) {
+vec4 sample4bppBank(Vdp1Cmd cmd, vec2 uv, uint v, uint colorBank, bool spd, bool endcEnabled) {
     uvec2 charSize = cmd.charSize;
     uint u = uint(clamp(uv.x * float(charSize.x), 0.0, float(charSize.x) - 1.0));
-    uint v = uint(clamp(uv.y * float(charSize.y), 0.0, float(charSize.y) - 1.0));
     if (endcEnabled) {
         uint endcnt = 0u;
         // Word-cached scan: the per-texel vramByte() re-fetches the same 32-bit
@@ -522,10 +520,9 @@ vec4 sample4bppBank(Vdp1Cmd cmd, vec2 uv, uint colorBank, bool spd, bool endcEna
     if ((colorindex & 0x8000u) != 0u && spctlRgb_4b) return packDirect(colorindex, cmd);
     return packPalette(colorindex, cmd);
 }
-vec4 sample4bppLut(Vdp1Cmd cmd, vec2 uv, uint colorLut, bool spd, bool endcEnabled) {
+vec4 sample4bppLut(Vdp1Cmd cmd, vec2 uv, uint v, uint colorLut, bool spd, bool endcEnabled) {
     uvec2 charSize = cmd.charSize;
     uint u = uint(clamp(uv.x * float(charSize.x), 0.0, float(charSize.x) - 1.0));
-    uint v = uint(clamp(uv.y * float(charSize.y), 0.0, float(charSize.y) - 1.0));
     // End-code terminator scan (F9): when ECD bit is CLEAR, dot=0xF acts as
     // a row terminator -- 1st end-code emits transparent, 2nd end-code makes
     // ALL subsequent pixels in the row transparent. Walk [0,u) and count
@@ -575,10 +572,9 @@ R"GLSL(
     if (msb || ns) return packShadowWithPri(pri, cmd);
     return packPaletteWithAttrs(masked, pri, cc, cmd);
 }
-vec4 sample8bppBank(Vdp1Cmd cmd, vec2 uv, uint colorBank, uint palMask, bool spd, bool endcEnabled) {
+vec4 sample8bppBank(Vdp1Cmd cmd, vec2 uv, uint v, uint colorBank, uint palMask, bool spd, bool endcEnabled) {
     uvec2 charSize = cmd.charSize;
     uint u = uint(clamp(uv.x * float(charSize.x), 0.0, float(charSize.x) - 1.0));
-    uint v = uint(clamp(uv.y * float(charSize.y), 0.0, float(charSize.y) - 1.0));
     if (endcEnabled) {
         uint endcnt = 0u;
         // Word-cached scan: 4 consecutive 8bpp texels share a 32-bit VRAM word.
@@ -760,7 +756,85 @@ vec2 inverseBilinear(vec2 p, vec2 A, vec2 B, vec2 C, vec2 D) {
 vec2 computeUV(vec2 P, Vdp1Cmd c) {
     return clamp(inverseBilinear(P, vec2(c.v0), vec2(c.v1), vec2(c.v2), vec2(c.v3)), 0.0, 1.0);
 }
-
+)GLSL"
+R"GLSL(
+// =============================================================================
+// Texture row selection (Saturn line stepping). VDP1 draws a textured
+// command as dmax + 1 lines between edges A->D and B->C, where dmax is the
+// longest Chebyshev length of those two edges, and picks each line's texture
+// row with an error term (the reference software renderer, ss/vdp1_common.h
+// VileTex::Setup and the per-line PreStep in ss/vdp1_sprite.cpp). Along a
+// line the texture column is stepped the same way per dot (ss/vdp1.cpp line
+// setup, ss/vdp1_common.h DrawLine). vdp1TexRow is the closed form of that
+// stepping; it must match Vdp1ComputeMath.cpp::vdp1TexRow (checked against
+// the stepping for every size in vdp1_compute_math_test).
+// =============================================================================
+int vdp1TexRow(int k, int n, int t0, int t1) {
+    int dt = t1 - t0;
+    int adt = abs(dt);
+    int rev = dt < 0 ? 1 : 0;
+    int inc; int adj; int e;
+    if (n <= adt) { inc = 2 * (adt + 1); adj = 2 * n;       e = adt + 1 - (2 * n + rev); }
+    else          { inc = 2 * adt;       adj = 2 * (n - 1); e = n - (2 * n - rev); }
+    e += k * inc;
+    int m = (e >= 0 && adj != 0) ? e / adj + 1 : 0;
+    return rev != 0 ? t0 - m : t0 + m;
+}
+// dmax and the A->B dot count minus one, computed on the host from the raw
+// Saturn vertices (Vdp1ComputeMath.cpp::packSpriteSteps) and carried in
+// Vdp1Cmd::lineSteps; the fb-pixel vertices are truncated after scaling and
+// cannot give them back exactly at non-integer scales.
+int cmdDmax(Vdp1Cmd c) { return int(c.lineSteps & 0xFFFFu); }
+int cmdLenAB(Vdp1Cmd c) { return int(c.lineSteps >> 16); }
+// One-line sprite: both side edges have length 0 (A == D, B == C), so the
+// hardware draws the single line A->B. The quad has no interior, so the
+// inverse bilinear solve degenerates (0/0) and cannot give the column.
+bool isOneLineSprite(Vdp1Cmd c) {
+    return c.cmdType == TYPE_DISTORTED_SPRITE && c.v0 == c.v3 && c.v1 == c.v2;
+}
+// Parameter of fb point P along A->B of a one-line sprite, measured at the
+// Saturn cell centre (P minus half a cell, see spriteTexRow).
+float oneLineParam(vec2 P, Vdp1Cmd c) {
+    vec2 e = vec2(c.v1 - c.v0);
+    float ee = dot(e, e);
+    if (ee <= 0.0) return 0.0;
+    vec2 q = P - 0.5 * vec2(pc.scaleX, pc.scaleY) - vec2(c.v0);
+    return clamp(dot(q, e) / ee, 0.0, 1.0);
+}
+// Texture column (flip applied) of the dot of a one-line sprite nearest to P.
+uint oneLineTexU(vec2 P, Vdp1Cmd c) {
+    int len = cmdLenAB(c);
+    int j = int(roundEven(oneLineParam(P, c) * float(len)));
+    int w = int(c.charSize.x);
+    bool flipH = (c.flip & 1u) != 0u;
+    return uint(vdp1TexRow(j, len + 1, flipH ? w - 1 : 0, flipH ? 0 : w - 1));
+}
+// Texture row (flip applied) of the Saturn line that covers fb point P.
+// Vertex (x, y) names Saturn cell (x, y), whose centre is half a cell past
+// the vertex in fb space, so the line parameter is solved at P minus half a
+// cell; line k then owns parameters within half a line of k / dmax.
+uint spriteTexRow(vec2 P, Vdp1Cmd c) {
+    int dmax = cmdDmax(c);
+    int k = 0;
+    if (dmax > 0) {
+        vec2 q = P - 0.5 * vec2(pc.scaleX, pc.scaleY);
+        float t;
+        if (c.v0 == c.v1 && c.v3 == c.v2) {
+            // Zero-width quad (A == B, D == C): every line is one dot on
+            // the A->D edge, so the line parameter is the projection on it.
+            vec2 e = vec2(c.v3 - c.v0);
+            t = dot(q - vec2(c.v0), e) / dot(e, e);
+        } else {
+            t = inverseBilinear(q, vec2(c.v0), vec2(c.v1), vec2(c.v2), vec2(c.v3)).y;
+        }
+        k = int(roundEven(clamp(t, 0.0, 1.0) * float(dmax)));
+    }
+    int h = int(c.charSize.y);
+    bool flipV = (c.flip & 2u) != 0u;
+    return uint(vdp1TexRow(k, dmax + 1, flipV ? h - 1 : 0, flipV ? 0 : h - 1));
+}
+)GLSL"
+R"GLSL(
 // F13: 2-triangle coverage / UV for concave or twisted quads. The 4-edge
 // inside-test is undefined on those quads (sign of the area sign flips
 // depending on which "inside" is meant), so we split into (v0,v1,v2) +
@@ -1123,7 +1197,8 @@ R"GLSL(
             // sprite meshes close their tiny inter-poly gaps even when
             // both edges round to the same screen pixel.
             if (!insideOrOnEdge(P, v0e, v1e, v2e, v3e, thrSq, c.flags)) return dst;
-            uv = computeUV(P, c);
+            uv = isOneLineSprite(c) ? vec2(oneLineParam(P, c), 0.0)
+                                    : computeUV(P, c);
         } else if ((c.flags & FLAG_TRI_SPLIT) != 0u) {
             // F13: concave / twisted / degenerate quad split into triangles
             // (v0,v1,v2) and (v0,v2,v3). Coverage = union of both triangles;
@@ -1224,8 +1299,16 @@ R"GLSL(
             // (v0,v1,v2,v3) in SCREEN space (manual section 5.2). Keep separate.
             vec2 texUv = uv;
             if ((c.flip & 1u) != 0u) texUv.x = 1.0 - texUv.x;
-            if ((c.flip & 2u) != 0u) texUv.y = 1.0 - texUv.y;
+            // Texture row: the Saturn line stepping (flip included),
+            // not a texture-space V. See spriteTexRow.
+            uint texV = min(spriteTexRow(P, c), c.charSize.y - 1u);
             texUv = clamp(texUv, 0.0, 1.0);
+            // One-line sprite: the column is the per-dot stepping along
+            // A->B (flip included), placed at the texel centre so the
+            // samplers' floor(uv.x * w) returns it unchanged.
+            if (isOneLineSprite(c)) {
+                texUv.x = (float(oneLineTexU(P, c)) + 0.5) / float(c.charSize.x);
+            }
             uint cm = (c.pmod >> 3) & 7u;
             bool spd = (c.pmod & 0x40u) != 0u;
             // ECD (CMDPMOD bit 7): CLEAR = end-code processing enabled. Only
@@ -1234,12 +1317,12 @@ R"GLSL(
             // Saturn manual instructs games to set this bit, and our branch
             // above doesn't sample textures, so end-code never fires there.
             bool endc = (c.pmod & 0x80u) == 0u;
-            if      (cm == 0u) src = sample4bppBank(c, texUv, c.color & 0xFFF0u, spd, endc);
-            else if (cm == 1u) src = sample4bppLut (c, texUv, c.color * 8u,      spd, endc);
-            else if (cm == 2u) src = sample8bppBank(c, texUv, c.color & 0xFFC0u, 0x3Fu, spd, endc);
-            else if (cm == 3u) src = sample8bppBank(c, texUv, c.color & 0xFF80u, 0x7Fu, spd, endc);
-            else if (cm == 4u) src = sample8bppBank(c, texUv, c.color & 0xFF00u, 0xFFu, spd, endc);
-            else if (cm == 5u) src = sample16bppRGB(c, texUv, spd, endc);
+            if      (cm == 0u) src = sample4bppBank(c, texUv, texV, c.color & 0xFFF0u, spd, endc);
+            else if (cm == 1u) src = sample4bppLut (c, texUv, texV, c.color * 8u,      spd, endc);
+            else if (cm == 2u) src = sample8bppBank(c, texUv, texV, c.color & 0xFFC0u, 0x3Fu, spd, endc);
+            else if (cm == 3u) src = sample8bppBank(c, texUv, texV, c.color & 0xFF80u, 0x7Fu, spd, endc);
+            else if (cm == 4u) src = sample8bppBank(c, texUv, texV, c.color & 0xFF00u, 0xFFu, spd, endc);
+            else if (cm == 5u) src = sample16bppRGB(c, texUv, texV, spd, endc);
             else return dst;
             if (src.a < 0.5) return dst;
         }
@@ -1360,7 +1443,7 @@ struct Vdp1Cmd {
     uint  vdp2Attrs;
     uint  priority;
     uint  colorcl;
-    uint  pad6;
+    uint  lineSteps;     // bits 0..15 dmax, bits 16..31 A->B length (raw Saturn)
     uint  pad7;
 };
 
@@ -1677,7 +1760,85 @@ vec2 inverseBilinear(vec2 p, vec2 A, vec2 B, vec2 C, vec2 D) {
 vec2 computeUV(vec2 P, Vdp1Cmd c) {
     return clamp(inverseBilinear(P, vec2(c.v0), vec2(c.v1), vec2(c.v2), vec2(c.v3)), 0.0, 1.0);
 }
-
+)GLSL"
+R"GLSL(
+// =============================================================================
+// Texture row selection (Saturn line stepping). VDP1 draws a textured
+// command as dmax + 1 lines between edges A->D and B->C, where dmax is the
+// longest Chebyshev length of those two edges, and picks each line's texture
+// row with an error term (the reference software renderer, ss/vdp1_common.h
+// VileTex::Setup and the per-line PreStep in ss/vdp1_sprite.cpp). Along a
+// line the texture column is stepped the same way per dot (ss/vdp1.cpp line
+// setup, ss/vdp1_common.h DrawLine). vdp1TexRow is the closed form of that
+// stepping; it must match Vdp1ComputeMath.cpp::vdp1TexRow (checked against
+// the stepping for every size in vdp1_compute_math_test).
+// =============================================================================
+int vdp1TexRow(int k, int n, int t0, int t1) {
+    int dt = t1 - t0;
+    int adt = abs(dt);
+    int rev = dt < 0 ? 1 : 0;
+    int inc; int adj; int e;
+    if (n <= adt) { inc = 2 * (adt + 1); adj = 2 * n;       e = adt + 1 - (2 * n + rev); }
+    else          { inc = 2 * adt;       adj = 2 * (n - 1); e = n - (2 * n - rev); }
+    e += k * inc;
+    int m = (e >= 0 && adj != 0) ? e / adj + 1 : 0;
+    return rev != 0 ? t0 - m : t0 + m;
+}
+// dmax and the A->B dot count minus one, computed on the host from the raw
+// Saturn vertices (Vdp1ComputeMath.cpp::packSpriteSteps) and carried in
+// Vdp1Cmd::lineSteps; the fb-pixel vertices are truncated after scaling and
+// cannot give them back exactly at non-integer scales.
+int cmdDmax(Vdp1Cmd c) { return int(c.lineSteps & 0xFFFFu); }
+int cmdLenAB(Vdp1Cmd c) { return int(c.lineSteps >> 16); }
+// One-line sprite: both side edges have length 0 (A == D, B == C), so the
+// hardware draws the single line A->B. The quad has no interior, so the
+// inverse bilinear solve degenerates (0/0) and cannot give the column.
+bool isOneLineSprite(Vdp1Cmd c) {
+    return c.cmdType == TYPE_DISTORTED_SPRITE && c.v0 == c.v3 && c.v1 == c.v2;
+}
+// Parameter of fb point P along A->B of a one-line sprite, measured at the
+// Saturn cell centre (P minus half a cell, see spriteTexRow).
+float oneLineParam(vec2 P, Vdp1Cmd c) {
+    vec2 e = vec2(c.v1 - c.v0);
+    float ee = dot(e, e);
+    if (ee <= 0.0) return 0.0;
+    vec2 q = P - 0.5 * vec2(pc.scaleX, pc.scaleY) - vec2(c.v0);
+    return clamp(dot(q, e) / ee, 0.0, 1.0);
+}
+// Texture column (flip applied) of the dot of a one-line sprite nearest to P.
+uint oneLineTexU(vec2 P, Vdp1Cmd c) {
+    int len = cmdLenAB(c);
+    int j = int(roundEven(oneLineParam(P, c) * float(len)));
+    int w = int(c.charSize.x);
+    bool flipH = (c.flip & 1u) != 0u;
+    return uint(vdp1TexRow(j, len + 1, flipH ? w - 1 : 0, flipH ? 0 : w - 1));
+}
+// Texture row (flip applied) of the Saturn line that covers fb point P.
+// Vertex (x, y) names Saturn cell (x, y), whose centre is half a cell past
+// the vertex in fb space, so the line parameter is solved at P minus half a
+// cell; line k then owns parameters within half a line of k / dmax.
+uint spriteTexRow(vec2 P, Vdp1Cmd c) {
+    int dmax = cmdDmax(c);
+    int k = 0;
+    if (dmax > 0) {
+        vec2 q = P - 0.5 * vec2(pc.scaleX, pc.scaleY);
+        float t;
+        if (c.v0 == c.v1 && c.v3 == c.v2) {
+            // Zero-width quad (A == B, D == C): every line is one dot on
+            // the A->D edge, so the line parameter is the projection on it.
+            vec2 e = vec2(c.v3 - c.v0);
+            t = dot(q - vec2(c.v0), e) / dot(e, e);
+        } else {
+            t = inverseBilinear(q, vec2(c.v0), vec2(c.v1), vec2(c.v2), vec2(c.v3)).y;
+        }
+        k = int(roundEven(clamp(t, 0.0, 1.0) * float(dmax)));
+    }
+    int h = int(c.charSize.y);
+    bool flipV = (c.flip & 2u) != 0u;
+    return uint(vdp1TexRow(k, dmax + 1, flipV ? h - 1 : 0, flipV ? 0 : h - 1));
+}
+)GLSL"
+R"GLSL(
 // Gouraud shading (Phase 1B.6) - VDP1 manual sec 5.2 / Table 5.3. CMDPMOD
 // bit 2 enables; cmd.gouraudAddr.x is VRAM offset of a 4 entry RGB555
 // vertex color table. Bias: actual_offset = table - 0x10 in 5 bit space.
@@ -1878,6 +2039,18 @@ vec4 sampleTexel16bppRGB(Vdp1Cmd c, uvec2 t, bool spd, bool endcEnabled) {
     bool msb = ((c.vdp2Attrs >> 16) & ATTR_MSB_SHADOW) != 0u;
     if (msb || ns) return packShadowWithPri(pri, c);
     return packPaletteWithAttrs(masked, pri, cc_, c);
+}
+
+// Sample one sprite texel for color mode cm; vec4(0) (transparent) for the
+// reserved modes 6/7.
+vec4 sampleSpriteTexel(Vdp1Cmd c, uvec2 t, uint cm, bool spd, bool endcEnabled) {
+    if (cm == 0u) return sampleTexel4bppBank(c, t, c.color & 0xFFF0u, spd, endcEnabled);
+    if (cm == 1u) return sampleTexel4bppLut (c, t, c.color * 8u,      spd, endcEnabled);
+    if (cm == 2u) return sampleTexel8bppBank(c, t, c.color & 0xFFC0u, 0x3Fu, spd, endcEnabled);
+    if (cm == 3u) return sampleTexel8bppBank(c, t, c.color & 0xFF80u, 0x7Fu, spd, endcEnabled);
+    if (cm == 4u) return sampleTexel8bppBank(c, t, c.color & 0xFF00u, 0xFFu, spd, endcEnabled);
+    if (cm == 5u) return sampleTexel16bppRGB(c, t, spd, endcEnabled);
+    return vec4(0);
 }
 )GLSL"
 R"GLSL(
@@ -2156,7 +2329,9 @@ R"GLSL(
             // charSize 1xN / Nx1 rotated distorted sprite would be a
             // mathematical strip; rare in Saturn content and skipped.
             float divX = float(effCharSize.x - 1u);
-            float divY = float(effCharSize.y - 1u);
+            // Side edges step one Saturn line (dmax lines span A->D),
+            // matching the dmax + 1 line grid below.
+            float divY = float(max(cmdDmax(c), 1));
             vec2 step_top   = (vec2(c.v1) - vec2(c.v0)) / divX;
             vec2 step_bot   = (vec2(c.v2) - vec2(c.v3)) / divX;
             vec2 step_left  = (vec2(c.v3) - vec2(c.v0)) / divY;
@@ -2228,15 +2403,16 @@ R"GLSL(
                 float thrSq_t = thinHalfHD * thinHalfHD;
                 if (!insidePolygonOrOnEdge(pTest, v0e, v1e, v2e, v3e, thrSq_t)) continue;
 
-                vec2 pixelUv = computeUV(pTest, c);
+                bool oneLine = isOneLineSprite(c);
+                vec2 pixelUv = oneLine ? vec2(oneLineParam(pTest, c), 0.0)
+                                       : computeUV(pTest, c);
                 uvec2 t = uvec2(
                     uint(clamp(int(floor(pixelUv.x * float(effCharSize.x))),
                                0, int(effCharSize.x) - 1)),
-                    uint(clamp(int(floor(pixelUv.y * float(effCharSize.y))),
-                               0, int(effCharSize.y) - 1))
+                    min(spriteTexRow(pTest, c), effCharSize.y - 1u)
                 );
                 if ((c.flip & 1u) != 0u) t.x = effCharSize.x - 1u - t.x;
-                if ((c.flip & 2u) != 0u) t.y = effCharSize.y - 1u - t.y;
+                if (oneLine) t.x = min(oneLineTexU(pTest, c), effCharSize.x - 1u);
 
                 vec4 src;
                 if (cm == 0u) src = sampleTexel4bppBank(c, t, c.color & 0xFFF0u, spd, endcEnabled);
@@ -2269,14 +2445,18 @@ R"GLSL(
         return;
     }
 
-    for (uint vBase = 0u; vBase < effCharSize.y; vBase += gl_WorkGroupSize.y) {
+    // Sprites walk the dmax + 1 Saturn lines instead of the texture rows:
+    // grid row v is line v, drawn with the row picked by the hardware
+    // line stepping (vdp1TexRow). POLYGON keeps its 1x1 virtual texel.
+    uint lineCount = isPolygon ? effCharSize.y : uint(cmdDmax(c)) + 1u;
+    for (uint vBase = 0u; vBase < lineCount; vBase += gl_WorkGroupSize.y) {
         for (uint uBase = 0u; uBase < effCharSize.x; uBase += gl_WorkGroupSize.x) {
             u = uBase + gl_LocalInvocationID.x;
             v = vBase + gl_LocalInvocationID.y;
-            if (u >= effCharSize.x || v >= effCharSize.y) continue;
+            if (u >= effCharSize.x || v >= lineCount) continue;
 
-            float ty0 = float(v) / float(effCharSize.y);
-            float ty1 = float(v + 1u) / float(effCharSize.y);
+            float ty0 = float(v) / float(lineCount);
+            float ty1 = float(v + 1u) / float(lineCount);
             float tx0 = float(u) / float(effCharSize.x);
             float tx1 = float(u + 1u) / float(effCharSize.x);
 
@@ -2323,7 +2503,7 @@ R"GLSL(
             bool isLeftEdgeTexel  = (u == 0u);
             bool isRightEdgeTexel = (u == effCharSize.x - 1u);
             bool isTopEdgeTexel   = (v == 0u);
-            bool isBotEdgeTexel   = (v == effCharSize.y - 1u);
+            bool isBotEdgeTexel   = (v == lineCount - 1u);
             bool isEdgeTexel = isLeftEdgeTexel || isRightEdgeTexel
                             || isTopEdgeTexel  || isBotEdgeTexel;
             if (isEdgeTexel && !isPolygon && (c.flags & FLAG_THIN) == 0u && !axisAligned) {
@@ -2338,7 +2518,12 @@ R"GLSL(
             // on v0..v3 stays unchanged; only the texel index for the sample
             // is mirrored. For POLYGON (effCharSize=(1,1)) this is a no-op.
             if ((c.flip & 1u) != 0u) t.x = effCharSize.x - 1u - t.x;
-            if ((c.flip & 2u) != 0u) t.y = effCharSize.y - 1u - t.y;
+            if (!isPolygon) {
+                bool flipV = (c.flip & 2u) != 0u;
+                int h = int(effCharSize.y);
+                t.y = uint(vdp1TexRow(int(v), int(lineCount),
+                                      flipV ? h - 1 : 0, flipV ? 0 : h - 1));
+            }
             vec4 src;
             if (isPolygon) {
                 // POLYGON: direct color from cmd.color (no texture, no spd, no
@@ -2358,7 +2543,7 @@ R"GLSL(
             else if (cm == 4u) src = sampleTexel8bppBank(c, t, c.color & 0xFF00u, 0xFFu, spd, endcEnabled);
             else if (cm == 5u) src = sampleTexel16bppRGB(c, t, spd, endcEnabled);
             else continue;
-            if (src.a < 0.5) continue;
+            if (src.a < 0.5 && isPolygon) continue;
 )GLSL"
 R"GLSL(
             // Phase 1B.6: Gouraud shading. Screen-space bilinear offset over
@@ -2371,7 +2556,7 @@ R"GLSL(
             if (!isPolygon) {
                 vec2 gouraudUv = vec2(
                     (float(u) + 0.5) / float(effCharSize.x),
-                    (float(v) + 0.5) / float(effCharSize.y)
+                    (float(v) + 0.5) / float(lineCount)
                 );
                 src.rgb = applyGouraud(src.rgb, gouraudUv, c);
             }
@@ -2453,13 +2638,30 @@ R"GLSL(
                         }
                         if (!insideTex) continue;
                     }
+                    // Sprite row per pixel: the grid row v is line v, but on a
+                    // rotated or distorted sprite the line that actually passes
+                    // through this pixel (measured at the Saturn cell centre,
+                    // see spriteTexRow) can be a neighbour. Use that line's row
+                    // so forward picks the same row as tile_shade.
+                    vec4 pixSrc = src;
+                    if (!isPolygon) {
+                        uint rowP = min(spriteTexRow(vec2(float(x) + 0.5, float(y) + 0.5), c),
+                                        effCharSize.y - 1u);
+                        if (rowP != t.y) {
+                            pixSrc = sampleSpriteTexel(c, uvec2(t.x, rowP), cm, spd, endcEnabled);
+                            pixSrc.rgb = applyGouraud(pixSrc.rgb, vec2(
+                                (float(u) + 0.5) / float(effCharSize.x),
+                                (float(v) + 0.5) / float(lineCount)), c);
+                        }
+                        if (pixSrc.a < 0.5) continue;
+                    }
                     // T1B.11: per-pixel POLYGON Gouraud. The 1x1 virtual
                     // texel collapses sprite-path per-texel gouraudUv to a
                     // uniform (0.5, 0.5), so for POLYGON we solve inverse-
                     // bilinear at the actual pixel center to get the real
                     // (s, t) the 4-vertex gouraud table is parameterized
                     // over. SPRITE keeps its existing per-texel path.
-                    vec4 finalSrc = src;
+                    vec4 finalSrc = pixSrc;
                     if (isPolygon && c.gouraudAddr.y != 0u) {
                         vec2 polyUv = computeUV(
                             vec2(float(x) + 0.5, float(y) + 0.5), c);

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="smb_card_title">共有フォルダから追加 (SMB)</string>
+    <string name="smb_card_desc">お手持ちのディスクから作成したゲームイメージを、家庭内ネットワークの PC や NAS から取り込みます</string>
+    <string name="smb_dialog_title">共有フォルダ (SMB)</string>
+    <string name="smb_pc_hint">Windows でフォルダを共有 (プロパティ &gt; 共有) してください。ホストには、この PC の家庭内ネットワークでの IP アドレスを入力します。コマンドプロンプトで ipconfig を実行し、「IPv4 アドレス」(192.168.x.x など) を使ってください。サインインには、そのフォルダにアクセスできる Windows のローカルアカウントを使います。Microsoft アカウントでは共有フォルダにサインインできないことが多いです。</string>
+    <string name="smb_host">ホスト名または IP アドレス</string>
+    <string name="smb_share">共有名</string>
+    <string name="smb_username">ユーザー名 (任意)</string>
+    <string name="smb_password">パスワード</string>
+    <string name="smb_domain">ドメイン (任意)</string>
+    <string name="smb_remember">この接続を記憶する</string>
+    <string name="smb_connect">接続</string>
+    <string name="smb_import">取り込む</string>
+    <string name="smb_import_count">取り込む (%1$d)</string>
+    <string name="smb_cancel_import">取り込みを中止</string>
+    <string name="smb_up_folder">.. (一つ上のフォルダ)</string>
+    <string name="smb_empty">フォルダもゲームファイルもありません</string>
+    <string name="smb_progress_format">%1$s\n%2$d / %3$d ファイル、%4$s / %5$s</string>
+    <string name="smb_extracting">%1$s を展開しています</string>
+    <string name="smb_error_host_required">ホストと共有名を入力してください</string>
+    <string name="smb_error_auth">サインインに失敗しました。ユーザー名、パスワード、ドメインを確認してください。</string>
+    <string name="smb_error_share_not_found">共有が見つかりません。共有名を確認してください。</string>
+    <string name="smb_error_unreachable">ホストに接続できません。アドレスとファイル共有が有効か確認してください。</string>
+    <string name="smb_error_timeout">ホストからの応答がありません。</string>
+    <string name="smb_error_access_denied">アクセスが拒否されました。</string>
+    <string name="smb_error_not_found">共有上にファイルが見つかりません。</string>
+    <string name="smb_error_other">共有フォルダのエラー: %1$s</string>
+    <string name="smb_import_done">%1$d 本のゲームを取り込みました</string>
+    <string name="smb_import_cancelled">取り込みを中止しました</string>
+    <string name="smb_import_no_game">取り込んだファイルにゲームが見つかりませんでした</string>
+    <string name="smb_purpose_hint">お手持ちのディスクから作成したゲームイメージを、同じネットワーク内の PC や NAS の共有フォルダから取り込みます。インターネット上のサーバーには接続できません。</string>
+    <string name="smb_error_not_local">接続できるのは家庭内ネットワークの PC や NAS だけです。192.168.x.x などのローカルアドレスを入力してください。</string>
+    <string name="smb_free_limit_none">無料版で追加できるゲームは %1$d 本までです。さらに追加するには購入してください。</string>
+    <string name="smb_free_limit_some">無料版で追加できるゲームは %1$d 本までです。あと %2$d 本追加できますが、%3$d 本選ばれています。選ぶゲームを減らすか、購入してください。</string>
+</resources>

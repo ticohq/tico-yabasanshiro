@@ -143,8 +143,6 @@
     <string name="edit">Правка</string>
     <string name="delete">Удалить</string>
     <string name="select_game_directory">Папки загрузки игр</string>
-    <string name="sound_curent">Текущий (высокое качество для быстрых устройств)</string>
-    <string name="sound_legacy">Устаревший (для медленных устройств)</string>
     <string name="res_native">Нативное (разрешение экрана устройства)</string>
     <string name="res_4x">4x</string>
     <string name="res_2x">2x</string>
@@ -966,4 +964,13 @@
     <string name="setting_on">Вкл.</string>
     <string name="setting_off">Выкл.</string>
     <string name="recommended_settings_offer_message">Для этого устройства рекомендуются следующие настройки. Применить их?</string>
+    <string name="video_filter_crt_hyllian">CRT (Hyllian)</string>
+    <string name="video_filter_crt_lottes">CRT (Lottes)</string>
+    <string name="video_filter_crt_newpixie">CRT (NewPixie)</string>
+    <string name="setting_about">О приложении</string>
+    <string name="third_party_notices">Сторонние лицензии</string>
+    <string name="third_party_notices_summary">Лицензии сторонних компонентов, входящих в это приложение</string>
+    <string name="sound_engine_light">Лёгкий (без DSP, для слабых устройств)</string>
+    <string name="sound_engine_normal">Обычный (точно как на оригинальном железе)</string>
+    <string name="sound_engine_enhanced">Улучшенный (высокое качество звука, больше нагрузка на ЦП)</string>
 </resources>

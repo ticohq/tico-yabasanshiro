@@ -104,6 +104,12 @@
     <string name="sound_engine">サウンドエンジン</string>
     <string name="video_filter_bilinear">バイリニア</string>
     <string name="video_filter_scanline">スキャンライン</string>
+    <string name="video_filter_crt_hyllian">CRT (Hyllian)</string>
+    <string name="video_filter_crt_lottes">CRT (Lottes)</string>
+    <string name="video_filter_crt_newpixie">CRT (NewPixie)</string>
+    <string name="setting_about">このアプリについて</string>
+    <string name="third_party_notices">サードパーティのライセンス</string>
+    <string name="third_party_notices_summary">このアプリに含まれるサードパーティ製コンポーネントのライセンス</string>
     <string name="video_resolution">描画解像度</string>
     <string name="open_cd_tray">CDのふたを開ける</string>
     <string name="close_cd_tray">CDのふたを閉じる</string>
@@ -134,8 +140,6 @@
     <string name="res_native">ネイティブ(このデバイスの解像度で描画)</string>
     <string name="res_original">オリジナル(サターンの解像度)</string>
     <string name="ar_original">オリジナル(サターンのアスペクト比)</string>
-    <string name="sound_curent">最新(クオリティは高いが遅い)</string>
-    <string name="sound_legacy">旧エンジン(クオリティは低いが速い)</string>
     <string name="poly_triangle">パースペクティブコレクション</string>
     <string name="cancel">キャンセル</string>
     <string name="canceled">キャンセルされました</string>
@@ -877,6 +881,9 @@
     <string name="pref_onscreen_pad_summary">画面上パッドのレイアウトと感度をカスタマイズします</string>
     <string name="pref_audio_summary_on">音声出力を有効にしています</string>
     <string name="pref_audio_summary_off">音声出力をミュートしています</string>
+    <string name="sound_engine_light">ライト (DSP なし・軽量)</string>
+    <string name="sound_engine_normal">ノーマル (実機に忠実)</string>
+    <string name="sound_engine_enhanced">エンハンスド (高音質化・CPU 負荷大)</string>
     <string name="pref_sound_engine_summary">サウンドエミュレーションエンジンを選択します</string>
     <string name="pref_scsp_time_sync_summary">サウンドタイミングの同期方法を選択します</string>
     <string name="pref_scsp_sync_per_frame_summary">フレームごとのSCSP同期サイクル数 (1-255)</string>

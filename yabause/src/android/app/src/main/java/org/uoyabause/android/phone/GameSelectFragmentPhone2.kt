@@ -1037,6 +1037,12 @@ class GameSelectFragmentPhone2 :
         viewModel.updateGameDatabase(refreshLevel = 3)
     }
 
+    override fun getImportPresenter(): GameSelectPresenter? = viewModel.presenter
+
+    override fun onGamesInstalled() {
+        viewModel.updateGameDatabase(refreshLevel = 3)
+    }
+
     // GameSelectPresenterListener
     override fun onShowMessage(string_id: Int) {
         Snackbar.make(rootView, string_id, Snackbar.LENGTH_SHORT).show()

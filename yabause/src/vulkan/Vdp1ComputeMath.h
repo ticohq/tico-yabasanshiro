@@ -37,6 +37,45 @@ bool normalizeWinding(glm::vec2& a, glm::vec2& b, glm::vec2& c, glm::vec2& d);
 // barycentric path that is well-defined on concave quads.
 bool isConcave(glm::vec2 a, glm::vec2 b, glm::vec2 c, glm::vec2 d);
 
+// Texture row read by line k of a textured VDP1 command drawn as n lines,
+// with the texture rows running from t0 to t1 (t1 < t0 when vertically
+// flipped). VDP1 steps the row with an error term set up for n lines over
+// |t1 - t0| + 1 rows (the reference software renderer, ss/vdp1_common.h
+// VileTex::Setup and the per-line PreStep in ss/vdp1_sprite.cpp); this is
+// the closed form of that stepping. Rows are left out evenly when there are
+// fewer lines than rows, repeated when there are more, and a single line
+// (n == 1) reads the middle row. Same name and body in the compute shaders.
+int vdp1TexRow(int k, int n, int t0, int t1);
+
+// Number of lines minus one that VDP1 draws for a quad A B C D (raw Saturn
+// coordinates): the longest Chebyshev length of the side edges A->D and
+// B->C. Each edge difference is sign-extended from 13 bits and the result
+// is masked to 12 bits, as the hardware does (the reference software
+// renderer, ss/vdp1_sprite.cpp dmax). A textured command is drawn as
+// vdp1CmdDmax(...) + 1 lines.
+int vdp1CmdDmax(glm::ivec2 a, glm::ivec2 b, glm::ivec2 c, glm::ivec2 d);
+
+// Chebyshev length of the segment a->b with 13-bit sign-extended
+// differences: the number of dots minus one VDP1 plots along a line.
+int vdp1LineLen(glm::ivec2 a, glm::ivec2 b);
+
+// Saturn vertices of a Normal Sprite at (x, y) with a w x h character, as the
+// hardware builds them: B = A + (max(w,1) - 1, 0), C/D = + (max(h,1) - 1).
+std::array<glm::ivec2, 4> normalSpriteQuad(int x, int y, int w, int h);
+
+// Value for Vdp1Cmd::lineSteps from the raw Saturn vertices A B C D of a
+// sprite: bits 0..15 = vdp1CmdDmax, bits 16..31 = vdp1LineLen(A, B). The
+// host hooks assign it after encoding, because the encoders only see the
+// scaled and truncated fb vertices.
+uint32_t packSpriteSteps(const std::array<glm::ivec2, 4>& saturnVerts);
+
+// Texture column (flip applied) of a one-line sprite (A == D, B == C) at fb
+// point p: the dot of A->B nearest to p (measured at the Saturn cell centre,
+// p - scale / 2), stepped with vdp1TexRow over lenAB + 1 dots. a/b are the
+// fb vertices. Host mirror of the shaders' oneLineTexU.
+int vdp1OneLineTexU(glm::vec2 p, glm::ivec2 a, glm::ivec2 b, glm::vec2 scale,
+                    int lenAB, int w, bool flipH);
+
 // Pack a VDP1 Polygon command (0100) into a Vdp1Cmd.
 // vertices: A,B,C,D = TL,TR,BR,BL (Saturn standard order). No CCW
 //   normalization is applied: the scanline rasterizer walks v0->v3 and v1->v2

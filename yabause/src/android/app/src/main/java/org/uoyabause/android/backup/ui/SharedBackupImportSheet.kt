@@ -44,6 +44,7 @@ import org.devmiyax.yabasanshiro.R
 import org.uoyabause.android.YabauseApplication
 import org.uoyabause.android.YabauseStorage
 import org.uoyabause.android.auth.AuthState
+import org.uoyabause.android.auth.ui.PcSignInActivity
 import org.uoyabause.android.backup.model.LocalBackupFile
 import org.uoyabause.android.backup.model.SharedBackupItem
 import org.uoyabause.android.backup.viewmodel.BackupUiEvent
@@ -210,7 +211,7 @@ class SharedBackupImportSheet : BottomSheetDialogFragment() {
         }
         if (!AuthState.isSignedIn()) {
             Toast.makeText(requireContext(), R.string.import_shared_backup_sign_in, Toast.LENGTH_SHORT).show()
-            signInLauncher.launch(buildSignInIntent())
+            signInLauncher.launch(PcSignInActivity.wrap(requireContext(), buildSignInIntent()))
             return
         }
         startImport(item)

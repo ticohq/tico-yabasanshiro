@@ -42,7 +42,6 @@ class DiscordAuthManager {
 
     // Configuration from secrets.plist
     private var CLIENT_ID: String = ""
-    private var CLIENT_SECRET: String = ""
     private var REDIRECT_URI: String = ""
     private var DISCORD_AUTH_URL: String = ""
     private var DISCORD_TOKEN_URL: String = ""
@@ -57,7 +56,6 @@ class DiscordAuthManager {
            let dict = NSDictionary(contentsOfFile: path) as? [String: Any] {
 
             CLIENT_ID = dict["discord_client_id"] as? String ?? ""
-            CLIENT_SECRET = dict["discord_client_secret"] as? String ?? ""
             REDIRECT_URI = dict["discord_redirect_uri"] as? String ?? ""
             DISCORD_AUTH_URL = dict["discord_auth_url"] as? String ?? ""
             DISCORD_TOKEN_URL = dict["discord_token_url"] as? String ?? ""
@@ -206,7 +204,6 @@ class DiscordAuthManager {
 
         let parameters = [
             "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
             "grant_type": "authorization_code",
             "code": code,
             "redirect_uri": REDIRECT_URI,

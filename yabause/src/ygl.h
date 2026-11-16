@@ -247,69 +247,72 @@ extern "C"
     s32 cog;
     s32 cob;
     int linescreen;
-    int id;
-  } YglSprite;
+	int id;
+	/* VDP1 texture row stepping in the GPU tessellation path (vdp1texrow.h).
+	   texrow_dmax < 0 turns it off (polygons, lines, clip rectangles).
+	   texrow_k0 / texrow_k1: line parameter on the A-B and D-C edges. */
+	int texrow_dmax;
+	float texrow_k0;
+	float texrow_k1;
+} YglSprite;
 
-  typedef struct
-  {
-    float x;
-    float y;
-  } YglCache;
+typedef struct {
+	float x;
+	float y;
+} YglCache;
 
-  typedef struct
-  {
-    unsigned int *textdata;
-    unsigned int w;
-  } YglTexture;
+typedef struct {
+	unsigned int * textdata;
+	unsigned int w;
+} YglTexture;
 
-#define HASHSIZE (0xFFFF)
-  typedef struct _YglCacheHash
-  {
-    u64 addr;
-    float x;
-    float y;
-    struct _YglCacheHash *next;
-  } YglCacheHash;
+#define HASHSIZE  (0xFFFF)
+typedef struct _YglCacheHash {
+	u64 addr;
+	float x;
+	float y;
+	struct _YglCacheHash * next;
+} YglCacheHash;
 
-  typedef struct
-  {
-    unsigned int currentX;
-    unsigned int currentY;
-    unsigned int yMax;
-    unsigned int *texture;
-    unsigned int width;
-    unsigned int height;
-    YglCacheHash *HashTable[HASHSIZE];
-    YglCacheHash CashLink[HASHSIZE * 2];
-    u32 CashLink_index;
+typedef struct {
+	unsigned int currentX;
+	unsigned int currentY;
+	unsigned int yMax;
+	unsigned int * texture;
+	unsigned int width;
+	unsigned int height;
+	YglCacheHash *HashTable[HASHSIZE];
+	YglCacheHash CashLink[HASHSIZE * 2];
+	u32 CashLink_index;
 
-    // GLuint textureID;
-    // GLuint pixelBufferID;
+	//GLuint textureID;
+	//GLuint pixelBufferID;
 
-    int current;
-    GLuint textureID_in[2];
-    GLuint pixelBufferID_in[2];
-    unsigned int *texture_in[2];
+  int current;
+  GLuint textureID_in[2];
+  GLuint pixelBufferID_in[2];
+  unsigned int * texture_in[2];
 
-  } YglTextureManager;
+} YglTextureManager;
 
-  extern YglTextureManager *YglTM;
-  // extern YglTextureManager * YglTM_vdp1;
+extern YglTextureManager * YglTM;
+//extern YglTextureManager * YglTM_vdp1;
 
-  YglTextureManager *YglTMInit(unsigned int, unsigned int);
-  void YglTMDeInit(YglTextureManager *tm);
-  void YglTMReset(YglTextureManager *tm);
-  void YglTMRealloc(YglTextureManager *tm, unsigned int width, unsigned int height);
-  void YglTMReserve(YglTextureManager *tm, unsigned int w, unsigned int h);
-  void YglTMAllocate(YglTextureManager *tm, YglTexture *, unsigned int, unsigned int, unsigned int *, unsigned int *);
-  void YglTmPush(YglTextureManager *tm);
-  void YglTmPull(YglTextureManager *tm, u32 flg);
+YglTextureManager * YglTMInit(unsigned int, unsigned int);
+void YglTMDeInit(YglTextureManager * tm );
+void YglTMReset( YglTextureManager * tm );
+void YglTMRealloc(YglTextureManager * tm, unsigned int width, unsigned int height);
+void YglTMReserve(YglTextureManager * tm, unsigned int w, unsigned int h);
+void YglTMAllocate(YglTextureManager * tm, YglTexture *, unsigned int, unsigned int, unsigned int *, unsigned int *);
+void YglTmPush(YglTextureManager * tm);
+void YglTmPull(YglTextureManager * tm, u32 flg);
 
-  void YglCacheInit(YglTextureManager *tm);
-  void YglCacheDeInit(YglTextureManager *tm);
-  int YglIsCached(YglTextureManager *tm, u64, YglCache *);
-  void YglCacheAdd(YglTextureManager *tm, u64, YglCache *);
-  void YglCacheReset(YglTextureManager *tm);
+
+void YglCacheInit(YglTextureManager * tm);
+void YglCacheDeInit(YglTextureManager * tm);
+int YglIsCached(YglTextureManager * tm, u64, YglCache *);
+void YglCacheAdd(YglTextureManager * tm, u64, YglCache *);
+void YglCacheReset(YglTextureManager * tm);
 
 #define VDP1_COLOR_CL_REPLACE 0x00
 #define VDP1_COLOR_CL_SHADOW 0x10
@@ -469,69 +472,79 @@ extern "C"
 
 #define FRAME_BUFFER_UNIFORM_ID (5)
 
-  typedef struct
-  {
-    int prgid;
-    GLuint prg;
-    GLuint vertexBuffer;
-    float *quads;
-    float *textcoords;
-    float *vertexAttribute;
-    int currentQuad;
-    int maxQuad;
-    int vaid;
-    char uClipMode;
-    short ux1, uy1, ux2, uy2;
-    int blendmode;
-    int preblendmode;
-    int bwin0, logwin0, bwin1, logwin1, bwinsp, logwinsp, winmode;
-    GLuint vertexp;
-    GLuint texcoordp;
-    GLuint mtxModelView;
-    GLuint mtxTexture;
-    GLuint color_offset;
-    GLuint tex0;
-    GLuint tex1;
-    float color_offset_val[4];
-    int (*setupUniform)(void *);
-    int (*cleanupUniform)(void *);
-    YglVdp1CommonParam *ids;
-    float *matrix;
-    int mosaic[2];
-    u32 lineTexture;
-    int id;
-    int colornumber;
-    GLuint interuput_texture;
-    u32 specialcolormode;
-    int tessellation_level; // Dynamic tessellation level
-  } YglProgram;
+typedef struct {
+   int prgid;
+   GLuint prg;
+   GLuint vertexBuffer;
+   float * quads;
+   float * textcoords;
+   float * vertexAttribute;
+   int currentQuad;
+   int maxQuad;
+   int vaid;
+   char uClipMode;
+   short ux1,uy1,ux2,uy2;
+   int blendmode;
+   int preblendmode;
+   int bwin0,logwin0,bwin1,logwin1, bwinsp, logwinsp, winmode;
+   GLuint vertexp;
+   GLuint texcoordp;
+   GLuint mtxModelView;
+   GLuint mtxTexture;
+   GLuint color_offset;
+   GLuint tex0;
+   GLuint tex1;
+   float color_offset_val[4];
+   int (*setupUniform)(void *);
+   int (*cleanupUniform)(void *);
+   YglVdp1CommonParam * ids;
+   float * matrix;
+   int mosaic[2];
+   u32 lineTexture;
+   int id;
+   int colornumber;
+   GLuint interuput_texture;
+   u32 specialcolormode;
+   int tessellation_level;  // Dynamic tessellation level
+} YglProgram;
 
-  typedef struct
-  {
-    int prgcount;
-    int prgcurrent;
-    int uclipcurrent;
-    short ux1, uy1, ux2, uy2;
-    int blendmode;
-    YglProgram *prg;
-  } YglLevel;
+typedef struct {
+   int prgcount;
+   int prgcurrent;
+   int uclipcurrent;
+   short ux1,uy1,ux2,uy2;
+   int blendmode;
+   YglProgram * prg;
+} YglLevel;
 
-  typedef struct
-  {
-    GLfloat m[4][4];
-  } YglMatrix;
+typedef struct
+{
+    GLfloat   m[4][4];
+} YglMatrix;
 
-  typedef enum
-  {
-    AA_NONE = 0,
-    AA_FXAA,
-    AA_SCANLINE_FILTER,
-    AA_BILNEAR_FILTER,
-  } AAMODE;
+typedef enum
+{
+  AA_NONE = 0,
+  AA_FXAA,
+  AA_SCANLINE_FILTER,
+  AA_BILNEAR_FILTER,
+  /* CRT mode (crt/README.md): the picture at the Saturn's own resolution,
+     scaled up through one of RetroArch's CRT shaders. Appended, never
+     inserted: the values are stored in the user's settings. */
+  AA_CRT_HYLLIAN,
+  AA_CRT_LOTTES,
+  AA_CRT_NEWPIXIE,
+} AAMODE;
 
-  typedef enum
-  {
-    PERSPECTIVE_CORRECTION = 0,
+#define YGL_IS_CRT_MODE(m) ((m) >= AA_CRT_HYLLIAN && (m) <= AA_CRT_NEWPIXIE)
+
+/* Recompute the effective resolution_mode / rbg_resolution_mode from the
+   filter and the user's settings (vidogl.c). */
+void VIDOGLApplyEffectiveResolution(void);
+
+typedef enum
+{
+	PERSPECTIVE_CORRECTION = 0,
 	CPU_TESSERATION        = 1,
 	GPU_TESSERATION        = 2,
 	COMPUTE_RASTERIZER     = 3
@@ -558,121 +571,129 @@ extern "C"
      ini file, so renumbering the existing entries would silently change what
      an existing installation is configured to do. */
   RBG_RES_4x
-  } RBG_RESOLUTION_MODE;
+} RBG_RESOLUTION_MODE;
 
-  typedef enum
-  {
-    ORIGINAL = 0,
-    _4_3,
-    _16_9,
-    FULL,
-  } ASPECT_RATE_MODE;
+typedef enum
+{
+  ORIGINAL = 0,
+  _4_3,
+  _16_9,
+  FULL,
+} ASPECT_RATE_MODE;
 
-  typedef enum
-  {
-    NBG0 = 0,
-    NBG1,
-    NBG2,
-    NBG3,
-    RBG0,
-    SPRITE,
-    enBGMAX
-  } enBG;
+typedef enum {
+	NBG0 = 0,
+	NBG1,
+	NBG2,
+	NBG3,
+	RBG0,
+	SPRITE,
+	enBGMAX
+} enBG;
 
-  typedef struct
-  {
-    u32 lincolor_tex;
-    u32 linecolor_pbo;
-    u32 *lincolor_buf;
-  } YglPerLineInfo;
+typedef struct {
+	u32 lincolor_tex;
+	u32 linecolor_pbo;
+	u32 * lincolor_buf;
+} YglPerLineInfo;
 
-  typedef struct
-  {
-    // GLuint texture;
-    // GLuint pixelBufferID;
-    int st;
-    char message[512];
-    int msglength;
-    int user_originx;
-    int user_originy;
-    int originx;
-    int originy;
-    unsigned int width;
-    unsigned int height;
-    unsigned int depth;
+typedef struct {
+   //GLuint texture;
+   //GLuint pixelBufferID;
+   int st;
+   char message[512];
+   int msglength;
+   int user_originx;
+   int user_originy;
+   int originx;
+   int originy;
+   // 1 when SetSaturnResolution put the output at the top of the window
+   // (full screen, picture limited by the window's width); the CRT mode
+   // places its picture the same way
+   int output_top;
+   unsigned int width;
+   unsigned int height;
+   unsigned int depth;
 
-    float clear_r;
-    float clear_g;
-    float clear_b;
+   float clear_r;
+   float clear_g;
+   float clear_b;
 
-    // VDP1 Info
-    int vdp1_maxpri;
-    int vdp1_minpri;
-    u32 vdp1_lineTexture;
-    int vdp1_hasMesh;
+   // VDP1 Info
+   int vdp1_maxpri;
+   int vdp1_minpri;
+   u32 vdp1_lineTexture;
+   int vdp1_hasMesh;
 
-    // VDP1 Framebuffer
-    int rwidth;
-    int rheight;
-    int density;
-    int drawframe;
-    int readframe;
-    GLuint rboid_depth;
-    GLuint rboid_stencil;
-    GLuint vdp1fbo;
-    GLuint vdp1FrameBuff[2];
-    GLuint smallfbo;
-    GLuint smallfbotex;
-    GLuint vdp1pixelBufferID;
-    void *pFrameBuffer;
+   // VDP1 Framebuffer
+   int rwidth;
+   int rheight;
+   int density;
+   int drawframe;
+   int readframe;
+   GLuint rboid_depth;
+   GLuint rboid_stencil;
+   GLuint vdp1fbo;
+   GLuint vdp1FrameBuff[2];
+   GLuint smallfbo;
+   GLuint smallfbotex;
+   GLuint vdp1pixelBufferID;
+   void * pFrameBuffer;
 
-    GLuint fxaa_fbo;
-    GLuint fxaa_fbotex;
-    GLuint fxaa_stencil;
-    GLuint fxaa_depth;
+   GLuint fxaa_fbo;
+   GLuint fxaa_fbotex;
+   GLuint fxaa_stencil;
+   GLuint fxaa_depth;
 
-    GLuint tmpfbo;
-    GLuint tmpfbotex;
+   GLuint tmpfbo;
+   GLuint tmpfbotex;
 
-    // Message Layer
-    int msgwidth;
-    int msgheight;
-    GLuint msgtexture;
-    u32 *messagebuf;
+   // Message Layer
+   int msgwidth;
+   int msgheight;
+   GLuint msgtexture;
+   u32 * messagebuf;
 
-    int bUpdateWindow;
-    int win0v[512 * 4];
-    int win0_vertexcnt;
-    int win1v[512 * 4];
-    int win1_vertexcnt;
+   int bUpdateWindow;
+   int win0v[512*4];
+   int win0_vertexcnt;
+   int win1v[512*4];
+   int win1_vertexcnt;
 
-    YglMatrix mtxModelView;
-    YglMatrix mtxTexture;
+   YglMatrix mtxModelView;
+   YglMatrix mtxTexture;
 
-    YglProgram windowpg;
-    YglProgram renderfb;
+   YglProgram windowpg;
+   YglProgram renderfb;
 
-    YglLevel *levels;
+   YglLevel * levels;
 
-    // Thread
-    YabMutex *mutex;
+   // Thread
+   YabMutex * mutex;
 
-    u32 lincolor_tex;
-    u32 linecolor_pbo;
-    u32 *lincolor_buf;
+   u32 lincolor_tex;
+   u32 linecolor_pbo;
+   u32 * lincolor_buf;
 
-    u32 back_tex;
-    u32 back_pbo;
-    u32 *backcolor_buf;
+   u32 back_tex;
+   u32 back_pbo;
+   u32 * backcolor_buf;
 
-    AAMODE aamode;
-    POLYGONMODE polygonmode;
-    RESOLUTION_MODE resolution_mode;
-    RBG_RESOLUTION_MODE rbg_resolution_mode;
-    int rbg_use_compute_shader;
-    YglTextureManager *texture_manager;
-    GLsync sync;
-    GLsync frame_sync;
+   AAMODE aamode;
+   POLYGONMODE polygonmode;
+   /* resolution_mode and rbg_resolution_mode are the effective values the
+      renderer reads; user_* are the ones the settings asked for. They differ
+      only while a CRT filter is selected, which renders at the Saturn's own
+      resolution (RES_ORIGINAL / RBG_RES_ORIGINAL). See
+      VIDOGLApplyEffectiveResolution in vidogl.c. */
+   RESOLUTION_MODE resolution_mode;
+   RBG_RESOLUTION_MODE rbg_resolution_mode;
+   RESOLUTION_MODE user_resolution_mode;
+   RBG_RESOLUTION_MODE user_rbg_resolution_mode;
+   int rbg_use_compute_shader;
+   YglTextureManager * texture_manager;
+   GLsync sync;
+   GLsync frame_sync;
     GLuint default_fbo;
     YglPerLineInfo bg[enBGMAX];
     u32 targetfbo;
