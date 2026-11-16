@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pc_sign_in_title">ログイン</string>
+    <string name="pc_sign_in_google_title">Google でログイン</string>
+    <string name="pc_sign_in_google_description">Google Play Games (PC) では、Google ログインをブラウザで行います。コードを取得し、PC またはスマートフォンで開いた Google のページに入力してください。</string>
+    <string name="pc_sign_in_get_code">ログインコードを取得</string>
+    <string name="pc_sign_in_step_open">1. PC またはスマートフォンのブラウザでこのページを開く</string>
+    <string name="pc_sign_in_open_browser">ブラウザで開く</string>
+    <string name="pc_sign_in_step_enter">2. このコードを入力し、Google アカウントを選ぶ</string>
+    <string name="pc_sign_in_waiting">ブラウザでの操作が終わるのを待っています…</string>
+    <string name="pc_sign_in_signing_in">ログインしています…</string>
+    <string name="pc_sign_in_denied">ブラウザでログインがキャンセルされました。</string>
+    <string name="pc_sign_in_expired">コードの有効期限が切れました。新しいコードを取得してやり直してください。</string>
+    <string name="pc_sign_in_failed">ログインに失敗しました: %1$s</string>
+    <string name="pc_sign_in_new_code">新しいコードを取得</string>
+    <string name="pc_sign_in_not_configured">このビルドでは Google ログインを利用できません。</string>
+    <string name="pc_sign_in_terms">ログインすると、利用規約 (yabasanshiro.com/terms-of-use) とプライバシーポリシー (yabasanshiro.com/privacy) に同意したものとみなされます。</string>
+</resources>

@@ -47,7 +47,6 @@ class DiscordAuthManager(
 
     // Configuration from local_security.xml
     private val clientId: String = context.getString(R.string.discord_client_id)
-    private val clientSecret: String = context.getString(R.string.discord_client_secret)
     private val redirectUri: String = context.getString(R.string.discord_redirect_uri)
     private val discordAuthUrl: String = context.getString(R.string.discord_auth_url)
     private val discordTokenUrl: String = context.getString(R.string.discord_token_url)
@@ -213,7 +212,6 @@ class DiscordAuthManager(
                 FormBody
                     .Builder()
                     .add("client_id", clientId)
-                    .add("client_secret", clientSecret)
                     .add("grant_type", "authorization_code")
                     .add("code", code)
                     .add("redirect_uri", redirectUri)

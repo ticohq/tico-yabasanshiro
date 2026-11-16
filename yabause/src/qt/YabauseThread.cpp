@@ -31,6 +31,7 @@
 #include "../persdljoy.h"
 #endif
 #include "../vdp2.h"
+#include "../vdpdump.h"
 
 #ifdef HAVE_VULKAN
 #include "vulkan/VIDVulkan.h"
@@ -237,8 +238,75 @@ void YabauseThread::initEmulation()
 		VIDVulkan::getInstance()->setRenderer(_vulkanRenderer);
   }
 #endif	
+#ifndef USE_SCSP2
+	// Set before YabauseInit(), so the SCSP thread never sees them change
+	// under it (ScspInit() builds the renderer when the mode is on).
+	// Sound/HighQuality is the user setting (sound page, or --sound-hq). It
+	// turns on the float DSP too, unless --sound-hq-float-dsp picks a mode.
+	{
+		const int hq = vs->value("Sound/HighQuality", false).toBool() ? 1 : 0;
+		ScspSetHighQualityFloatDsp(vs->value("Sound/HighQualityFloatDsp", hq).toInt());
+		ScspSetHighQuality(hq);
+	}
+	{
+		// --sound-hq-fx-out=FILE (developer): for every sample with the float
+		// DSP on, the effect returns of the chip's DSP and of the float DSP,
+		// raw float32 (chip L, chip R, float L, float R).
+		static FILE * fxOut = NULL;
+		const QString path = vs->value("Debug/SoundHqFxOut").toString();
+		if (!path.isEmpty() && fxOut == NULL) {
+			fxOut = fopen(path.toLocal8Bit().constData(), "wb");
+			if (fxOut) {
+				struct Hook {
+					static void write(const float chip[2], const float flt[2]) {
+						const float v[4] = { chip[0], chip[1], flt[0], flt[1] };
+						fwrite(v, sizeof(v), 1, fxOut);
+					}
+				};
+				scsp_hq_fx_output_hook = &Hook::write;
+			}
+		}
+	}
+	{
+		// --sound-hq-chip-out=FILE (developer): for every sample the chip's own
+		// output and the high-quality output that replaces it, raw 16-bit
+		// (chip L, chip R, hq L, hq R) after a 44-byte blank header.
+		static FILE * chipOut = NULL;
+		const QString path = vs->value("Debug/SoundHqChipOut").toString();
+		if (!path.isEmpty() && chipOut == NULL) {
+			chipOut = fopen(path.toLocal8Bit().constData(), "wb");
+			if (chipOut) {
+				static const char header[44] = { 0 };
+				fwrite(header, 1, sizeof(header), chipOut);
+				struct Hook {
+					static void write(s16 chip_l, s16 chip_r, s16 hq_l, s16 hq_r) {
+						const s16 v[4] = { chip_l, chip_r, hq_l, hq_r };
+						fwrite(v, sizeof(v), 1, chipOut);
+					}
+				};
+				scsp_hq_chip_output_hook = &Hook::write;
+			}
+		}
+	}
+#endif
 	mInit = YabauseInit( &mYabauseConf );
-	SetOSDToggle(showFPS);
+	if (vdpDumpMode()) {
+		// With the HLE BIOS and no disc YabauseInit() reports -2 (no game)
+		// after every subsystem is initialized; the dump needs nothing more.
+		if (mInit == -2)
+			mInit = 0;
+		mVdpDumpPrefix = vs->value("VdpDump/Prefix").toString().toLocal8Bit();
+		mVdpDumpFrames = vs->value("VdpDump/Frames", 3).toInt();
+		if (mVdpDumpFrames < 1)
+			mVdpDumpFrames = 3;
+		mVdpDumpDone = 0;
+		mVdpDumpError = false;
+		printf("[VDPDUMP] init rc=%d polygon_mode=%d resolution_mode=%d filter_mode=%d frames=%d\n", mInit,
+		       mYabauseConf.polygon_generation_mode, mYabauseConf.resolution_mode,
+		       mYabauseConf.video_filter_type, mVdpDumpFrames);
+		fflush(stdout);
+	}
+	SetOSDToggle(showFPS && !vdpDumpMode());
 }
 
 
@@ -677,10 +745,9 @@ void YabauseThread::reloadSettings()
 	mYabauseConf.videoformattype = VIDEOFORMATTYPE_NTSC;
    mYabauseConf.use_new_scsp = (int)vs->value("Sound/NewScsp", mYabauseConf.use_new_scsp).toBool();
 
-	// The filter (FXAA / scanline) is no longer user-selectable. It was only
-	// ever implemented in the OpenGL renderer -- VIDVulkan::SetFilterMode is an
-	// empty stub -- so the control is gone and the mode stays off.
-	mYabauseConf.video_filter_type = 0;
+	// Output filter (AAMODE in ygl.h): None, FXAA, scanline, bilinear and the
+	// CRT shaders. The "Filter" combo box of the video settings page stores it.
+	mYabauseConf.video_filter_type = vs->value("Video/filter_mode", 0).toInt();
 	mYabauseConf.polygon_generation_mode = vs->value("Video/polygon_generation_mode", mYabauseConf.polygon_generation_mode).toInt();
   mYabauseConf.resolution_mode = vs->value("Video/resolution_mode", mYabauseConf.resolution_mode).toInt();
   mYabauseConf.rbg_resolution_mode = vs->value("Video/rbg_resolution_mode", mYabauseConf.rbg_resolution_mode).toInt();
@@ -780,7 +847,79 @@ void YabauseThread::timerEvent( QTimerEvent* )
 }
 
 
+bool YabauseThread::vdpDumpMode() {
+	// The prefix is set once from the command line before the window exists;
+	// cache it so paintGL does not query the settings every frame.
+	static const bool mode =
+		!QtYabause::volatileSettings()->value("VdpDump/Prefix").toString().isEmpty();
+	return mode;
+}
+
 void YabauseThread::execEmulation() {
-	if (!mPause)
-		PERCore->HandleEvents();
+	if (mPause)
+		return;
+	if (!mVdpDumpPrefix.isEmpty()) {
+		// Developer mode: replay the dump every frame; no CPU runs.
+		if (vdpDumpReady())
+			return;
+		// --vdp-dump-filters=a,b,c: the filter of frame 1, 2, 3 (the last one
+		// stays), switched at run time the way the settings dialog does.
+		const QStringList filters = QtYabause::volatileSettings()->value("VdpDump/Filters").toString().split(',', Qt::SkipEmptyParts);
+		if (!filters.isEmpty()) {
+			const int f = filters.at(qMin(mVdpDumpDone, (int)filters.size() - 1)).toInt();
+			VideoSetSetting(VDP_SETTING_FILTERMODE, f);
+			printf("[VDPDUMP] frame %d filter %d\n", mVdpDumpDone + 1, f);
+		}
+		if (VdpDumpRunFrame(mVdpDumpPrefix.constData()) != 0) {
+			printf("[VDPDUMP] cannot load dump %s\n", mVdpDumpPrefix.constData());
+			mVdpDumpError = true;
+		} else {
+			++mVdpDumpDone;
+		}
+		fflush(stdout);
+		return;
+	}
+	PERCore->HandleEvents();
+	soundTestEvents();
+}
+
+// Developer mode for checking the sound output across a state load and a
+// reset: --sound-test-events=S,L,R saves a state to memory after emulated
+// frame S, loads it back after frame L and resets after frame R (0 = never).
+// An optional fourth value K prints the SCSP high-quality key-on statistics
+// after frame K.
+void YabauseThread::soundTestEvents()
+{
+	static const QStringList ev =
+		QtYabause::volatileSettings()->value("Debug/SoundTestEvents").toString().split(',');
+	if (ev.size() != 3 && ev.size() != 4)
+		return;
+	++mSoundTestFrame;
+	const int f = mSoundTestFrame;
+	if (f == ev[0].toInt()) {
+		free(mSoundTestState);
+		mSoundTestState = nullptr;
+		mSoundTestStateSize = 0;
+		const int rc = YabSaveStateBuffer(&mSoundTestState, &mSoundTestStateSize);
+		printf("[SNDTEST] frame %d save rc=%d size=%u\n", f, rc, (unsigned)mSoundTestStateSize);
+	}
+	if (f == ev[1].toInt() && mSoundTestState) {
+		const int rc = YabLoadStateBuffer(mSoundTestState, mSoundTestStateSize);
+		printf("[SNDTEST] frame %d load rc=%d\n", f, rc);
+	}
+	if (f == ev[2].toInt()) {
+		YabauseReset();
+		printf("[SNDTEST] frame %d reset\n", f);
+	}
+#ifndef USE_SCSP2
+	if (ev.size() == 4 && f == ev[3].toInt()) {
+		u32 calls[32], taps[32], zero[32];
+		ScspHqGetKeyOnStats(calls, taps, zero);
+		for (int i = 0; i < 32; i++)
+			printf("[SNDTEST] frame %d slot %2d keyon() %u, tap key_on %u, op2 sample_counter==0 %u\n",
+			       f, i, calls[i], taps[i], zero[i]);
+		printf("[SNDTEST] frame %d float DSP seeds %u\n", f, ScspHqGetFloatDspSeedCount());
+	}
+#endif
+	fflush(stdout);
 }

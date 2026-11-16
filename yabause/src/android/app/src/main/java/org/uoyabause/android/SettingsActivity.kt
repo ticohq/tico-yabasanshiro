@@ -181,6 +181,54 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
+        /**
+         * Offers the filters [videoCore] implements (see [VideoFilter]) and
+         * shows the stored one, or None when this core does not offer it.
+         * The stored value is not rewritten.
+         */
+        private fun ListPreference.applyFilterChoices(videoCore: String?) {
+            val labels = resources.getStringArray(R.array.entries_video_filte_list_preference)
+            val values = resources.getStringArray(R.array.entryvalues_video_filte_list_preference).toList()
+            val offered = VideoFilter.offeredValues(videoCore, values)
+            entries = offered.map { labels[values.indexOf(it)] }.toTypedArray()
+            entryValues = offered.toTypedArray()
+            isEnabled = VideoFilter.isSelectable(videoCore)
+            updateFilterSummary()
+        }
+
+        /** The license notices of the third-party code in the app (res/raw/third_party_notices.txt). */
+        private fun showThirdPartyNotices() {
+            val context = requireContext()
+            val text =
+                context.resources
+                    .openRawResource(R.raw.third_party_notices)
+                    .bufferedReader()
+                    .use { it.readText() }
+            val dialog =
+                MaterialAlertDialogBuilder(context)
+                    .setTitle(R.string.third_party_notices)
+                    .setMessage(text)
+                    .setPositiveButton(R.string.close, null)
+                    .create()
+            dialog.setOnShowListener {
+                val button = dialog.getButton(DialogInterface.BUTTON_POSITIVE)
+                button?.post {
+                    button.isFocusable = true
+                    button.isFocusableInTouchMode = true
+                    button.requestFocus()
+                }
+            }
+            dialog.show()
+        }
+
+        private fun ListPreference.updateFilterSummary() {
+            val offered = entryValues?.map { it.toString() } ?: emptyList()
+            val sharedPref = PreferenceManager.getDefaultSharedPreferences(requireContext())
+            val shown = VideoFilter.displayValue(sharedPref.getStringSafe(key, VideoFilter.NONE), offered)
+            val index = offered.indexOf(shown)
+            summary = if (index >= 0) entries[index] else null
+        }
+
         override fun onResume() {
             super.onResume()
             inputManager?.registerInputDeviceListener(this, null)
@@ -589,9 +637,8 @@ class SettingsActivity : AppCompatActivity() {
 
             // Filter
             val filterSetting =
-                preferenceManager.findPreference("pref_filter") as ListPreference?
-            filterSetting!!.safeSummary()
-            filterSetting.isEnabled = videoCart.value == "1"
+                preferenceManager.findPreference(VideoFilter.KEY) as ListPreference?
+            filterSetting!!.applyFilterChoices(videoCart.value)
 
             // scsp
             val scspSetting =
@@ -679,6 +726,11 @@ class SettingsActivity : AppCompatActivity() {
             compositeSetting?.safeSummary()
             compositeSetting?.isEnabled =
                 Vdp2Composite.isSelectable(videoCart.value?.toIntOrNull() ?: -1)
+
+            findPreference<Preference>("pref_third_party_notices")?.setOnPreferenceClickListener {
+                showThirdPartyNotices()
+                true
+            }
 
             findPreference<Preference>("pref_apply_recommended")?.setOnPreferenceClickListener {
                 val context = requireContext()
@@ -925,10 +977,13 @@ class SettingsActivity : AppCompatActivity() {
             ) {
                 val pref = findPreference(key) as ListPreference?
                 pref!!.safeSummary()
+                if (key == VideoFilter.KEY) {
+                    pref.updateFilterSummary()
+                }
                 if (key == "pref_video") {
                     val filterSetting =
-                        preferenceManager.findPreference("pref_filter") as ListPreference?
-                    filterSetting!!.isEnabled = pref.value == "1"
+                        preferenceManager.findPreference(VideoFilter.KEY) as ListPreference?
+                    filterSetting!!.applyFilterChoices(pref.value)
                     val polygonSetting =
                         preferenceManager.findPreference("pref_polygon_generation") as ListPreference?
                     polygonSetting!!.safeSummary()

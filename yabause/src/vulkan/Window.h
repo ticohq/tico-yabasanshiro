@@ -40,6 +40,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 
 class Renderer;
 
+// Developer option: create the next window off the primary monitor and show
+// it without taking focus (desktop GLFW only; no-op elsewhere).
+void WindowPlaceOffPrimaryMonitor(bool on);
+
 class Window {
 public:
   Window(Renderer* renderer, uint32_t size_x, uint32_t size_y, std::string name, void* nativeWindow);

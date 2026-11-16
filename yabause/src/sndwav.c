@@ -131,22 +131,26 @@ static int SNDWavInit(void)
 
 //////////////////////////////////////////////////////////////////////////////
 
+// Writes the RIFF and data chunk sizes for what the file holds so far.
+static void SNDWavFixSizes(void)
+{
+   long length = ftell(wavefp);
+   u32 riff_size = (u32)(length - 8);
+   u32 data_size = (u32)(length - (long)(sizeof(waveheader_struct) + sizeof(fmt_struct) + sizeof(chunk_struct)));
+   fseek(wavefp, 4, SEEK_SET);
+   fwrite(&riff_size, 4, 1, wavefp);
+   fseek(wavefp, (long)(sizeof(waveheader_struct) + sizeof(fmt_struct) + 4), SEEK_SET);
+   fwrite(&data_size, 4, 1, wavefp);
+   fseek(wavefp, 0, SEEK_END);
+}
+
 static void SNDWavDeInit(void)
 {
    if (wavefp)
    {
-      long length = ftell(wavefp);
-      IOCheck_struct check = { 0, 0 };
-
-      // Let's fix the riff chunk size and the data chunk size
-      fseek(wavefp, sizeof(waveheader_struct)-0x8, SEEK_SET);
-      length -= 0x4;
-      ywrite(&check, (void *)&length, 1, 4, wavefp);
-
-      fseek(wavefp, sizeof(waveheader_struct)+sizeof(fmt_struct)+0x4, SEEK_SET);
-      length -= sizeof(waveheader_struct)+sizeof(fmt_struct);
-      ywrite(&check, (void *)&length, 1, 4, wavefp);
+      SNDWavFixSizes();
       fclose(wavefp);
+      wavefp = NULL;
    }
 }
 
@@ -168,28 +172,36 @@ static int SNDWavChangeVideoFormat(UNUSED int vertfreq)
 
 static void SNDWavUpdateAudio(u32 *leftchanbuffer, u32 *rightchanbuffer, u32 num_samples)
 {
-   s16 stereodata16[44100 / 50];
-   ScspConvert32uto16s((s32 *)leftchanbuffer, (s32 *)rightchanbuffer, (s16 *)stereodata16, num_samples);
-   fwrite((void *)stereodata16, sizeof(s16) * 2, num_samples, wavefp);
+   // Converted in chunks: one call can carry a whole frame (735 or 882
+   // samples), more than the stereo buffer below holds.
+   s16 stereodata16[2 * 256];
+   while (num_samples > 0)
+   {
+      u32 n = num_samples > 256 ? 256 : num_samples;
+      ScspConvert32uto16s((s32 *)leftchanbuffer, (s32 *)rightchanbuffer, (s16 *)stereodata16, n);
+      if (wavefp)
+         fwrite((void *)stereodata16, sizeof(s16) * 2, n, wavefp);
+      leftchanbuffer += n;
+      rightchanbuffer += n;
+      num_samples -= n;
+   }
+
+   // Keep the chunk sizes current: a run can end with exit() (play record
+   // playback does), which never reaches SNDWavDeInit.
+   if (wavefp)
+   {
+      SNDWavFixSizes();
+      fflush(wavefp);
+   }
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
 static u32 SNDWavGetAudioSpace(void)
 {
-   /* A "hack" to get sound core working enough
-    * so videos are not "freezing". Values have been
-    * found by experiments... I don't have a clue why
-    * they are working ^^;
-    */
-   static int i = 0;
-   i++;
-   if (i == 55) {
-      i = 0;
-      return 85;
-   } else {
-      return 0;
-   }
+   // A file never fills up: take every sample the SCSP produced, so the file
+   // holds the complete output stream (and is the same on every run).
+   return 0x7FFFFFFF;
 }
 
 //////////////////////////////////////////////////////////////////////////////

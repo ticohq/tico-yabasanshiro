@@ -237,6 +237,10 @@ class YabauseRunnable(
         @JvmStatic
         external fun setSoundEngine(engine: Int)
 
+        /** High-quality sound of the current sound engine: 1 on, 0 off. */
+        @JvmStatic
+        external fun setSoundHighQuality(enable: Int)
+
         @JvmStatic
         external fun setResolutionMode(resoution_mode: Int)
 

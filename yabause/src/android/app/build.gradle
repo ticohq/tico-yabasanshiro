@@ -119,12 +119,19 @@ android {
         minSdkVersion 24
         targetSdkVersion 36
         multiDexEnabled true
-        versionCode 363
-        versionName '1.20.46'
+        versionCode 372
+        versionName '1.20.55'
         multiDexEnabled true
         vectorDrawables.useSupportLibrary = true
         signingConfig signingConfigs.pro
         buildConfigField "int", "MAX_FREE_GAMES", "3"
+        // OAuth client of type "TVs and Limited Input devices" used for Google sign-in on
+        // Google Play Games on PC, where on-device Google account tokens are unavailable.
+        // Set in ~/.gradle/gradle.properties locally, or via environment variables on CI.
+        def deviceClientId = project.findProperty('googleDeviceClientId') ?: System.getenv('GOOGLE_DEVICE_CLIENT_ID') ?: ''
+        def deviceClientSecret = project.findProperty('googleDeviceClientSecret') ?: System.getenv('GOOGLE_DEVICE_CLIENT_SECRET') ?: ''
+        buildConfigField "String", "GOOGLE_DEVICE_CLIENT_ID", "\"${deviceClientId}\""
+        buildConfigField "String", "GOOGLE_DEVICE_CLIENT_SECRET", "\"${deviceClientSecret}\""
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         javaCompileOptions {
@@ -321,6 +328,9 @@ dependencies {
     implementation 'com.google.android.gms:play-services-analytics:18.1.1'
     implementation 'com.google.android.gms:play-services-auth:21.3.0'
     implementation 'com.firebaseui:firebase-ui-auth:9.1.1'
+    implementation 'androidx.credentials:credentials:1.5.0'
+    implementation 'androidx.credentials:credentials-play-services-auth:1.5.0'
+    implementation 'com.google.android.libraries.identity.googleid:googleid:1.1.1'
 
 
 
@@ -373,6 +383,8 @@ dependencies {
     implementation "org.tukaani:xz:1.11"
     implementation "com.android.billingclient:billing-ktx:8.3.0"
     implementation 'com.frybits.harmony:harmony:1.2.7'
+    // SMB client for importing games from a Windows shared folder
+    implementation 'com.hierynomus:smbj:0.14.0'
     implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.10.0"
 
     def room_version = "2.6.1"

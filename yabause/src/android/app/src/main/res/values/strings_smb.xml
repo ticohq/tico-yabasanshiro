@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="smb_card_title">From shared folder (SMB)</string>
+    <string name="smb_card_desc">Import game images you made from your own discs, from a PC or NAS on your home network</string>
+    <string name="smb_dialog_title">Shared folder (SMB)</string>
+    <string name="smb_pc_hint">Share a folder in Windows (Properties &gt; Sharing). For the host, enter this PC\'s IP address on your home network: run ipconfig in Command Prompt and use the IPv4 Address (for example 192.168.x.x). Sign in with a local Windows account that can access the folder; Microsoft accounts often cannot sign in to shared folders.</string>
+    <string name="smb_host">Host name or IP address</string>
+    <string name="smb_share">Share name</string>
+    <string name="smb_username">User name (optional)</string>
+    <string name="smb_password">Password</string>
+    <string name="smb_domain">Domain (optional)</string>
+    <string name="smb_remember">Remember this connection</string>
+    <string name="smb_connect">Connect</string>
+    <string name="smb_import">Import</string>
+    <string name="smb_import_count">Import (%1$d)</string>
+    <string name="smb_cancel_import">Cancel import</string>
+    <string name="smb_up_folder">.. (up one folder)</string>
+    <string name="smb_empty">No folders or game files here</string>
+    <string name="smb_progress_format">%1$s\n%2$d / %3$d files, %4$s of %5$s</string>
+    <string name="smb_extracting">Extracting %1$s</string>
+    <string name="smb_error_host_required">Enter the host and the share name</string>
+    <string name="smb_error_auth">Sign-in failed. Check the user name, the password and the domain.</string>
+    <string name="smb_error_share_not_found">The share was not found. Check the share name.</string>
+    <string name="smb_error_unreachable">Cannot reach the host. Check the address and that file sharing is on.</string>
+    <string name="smb_error_timeout">The host did not respond in time.</string>
+    <string name="smb_error_access_denied">Access was denied.</string>
+    <string name="smb_error_not_found">A file was not found on the share.</string>
+    <string name="smb_error_other">Shared folder error: %1$s</string>
+    <string name="smb_import_done">Imported %1$d game(s)</string>
+    <string name="smb_import_cancelled">Import cancelled</string>
+    <string name="smb_import_no_game">No game was found in the imported files</string>
+    <string name="smb_purpose_hint">Import game images you made from discs you own, from a shared folder on a PC or NAS on the same network. Servers on the internet cannot be used.</string>
+    <string name="smb_error_not_local">Only PCs and NAS devices on your local network can be used. Enter a local address such as 192.168.x.x.</string>
+    <string name="smb_free_limit_none">The free version holds up to %1$d games. Subscribe to add more.</string>
+    <string name="smb_free_limit_some">The free version holds up to %1$d games: %2$d more can be added, but %3$d are selected. Select fewer games or subscribe.</string>
+</resources>

@@ -155,8 +155,6 @@
     <string name="delete">删除</string>
     <string name="select_game_directory">选择游戏目录</string>
     <string name="add_dir">添加</string>
-    <string name="sound_curent">当前(对于高端设备 高品质版本)</string>
-    <string name="sound_legacy">传统(对于低端设备)</string>
     <string name="res_native">本机(此设备的原始分辨率)</string>
     <string name="res_4x">4x</string>
     <string name="res_2x">2x</string>
@@ -983,4 +981,13 @@
     <string name="setting_on">开</string>
     <string name="setting_off">关</string>
     <string name="recommended_settings_offer_message">建议此设备使用以下设置。要应用吗？</string>
+    <string name="video_filter_crt_hyllian">CRT (Hyllian)</string>
+    <string name="video_filter_crt_lottes">CRT (Lottes)</string>
+    <string name="video_filter_crt_newpixie">CRT (NewPixie)</string>
+    <string name="setting_about">关于</string>
+    <string name="third_party_notices">第三方声明</string>
+    <string name="third_party_notices_summary">本应用所含第三方组件的许可证</string>
+    <string name="sound_engine_light">轻量 (无 DSP，适合低端设备)</string>
+    <string name="sound_engine_normal">标准 (忠实还原实机)</string>
+    <string name="sound_engine_enhanced">增强 (高音质，CPU 占用更高)</string>
 </resources>

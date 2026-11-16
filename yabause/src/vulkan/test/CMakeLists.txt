@@ -193,3 +193,25 @@ target_link_libraries(vdp2_compositor_test
 )
 
 gtest_discover_tests(vdp2_compositor_test)
+
+# -------------------------------------------------------
+# vdp2_rotbank_test
+# -------------------------------------------------------
+add_executable(vdp2_rotbank_test
+    vdp2_rotbank_test.cpp
+)
+
+target_compile_definitions(vdp2_rotbank_test PRIVATE
+    HAVE_STDINT_H=1
+    HAVE_C99_VARIADIC_MACROS=1
+)
+
+target_include_directories(vdp2_rotbank_test PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../   # for vdp2_rotbank.h, core.h
+)
+
+target_link_libraries(vdp2_rotbank_test
+    GTest::gtest_main
+)
+
+gtest_discover_tests(vdp2_rotbank_test)

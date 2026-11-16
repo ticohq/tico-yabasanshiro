@@ -51,6 +51,7 @@ import kotlinx.coroutines.launch
 import org.devmiyax.yabasanshiro.R
 import org.uoyabause.android.YabauseApplication
 import org.uoyabause.android.auth.AuthState
+import org.uoyabause.android.auth.ui.PcSignInActivity
 import org.uoyabause.android.backup.BackupShareLink
 import org.uoyabause.android.backup.model.LocalBackupFile
 import org.uoyabause.android.backup.model.SharedBackupItem
@@ -202,7 +203,7 @@ class SharedBackupSearchFragment :
                             AppleBuilder().build(),
                         ),
                     ).build()
-            signInLauncher.launch(signInIntent)
+            signInLauncher.launch(PcSignInActivity.wrap(requireContext(), signInIntent))
         }
     }
 

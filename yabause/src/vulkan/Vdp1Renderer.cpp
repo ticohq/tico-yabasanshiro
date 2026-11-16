@@ -30,6 +30,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 #include "VulkanGpuProfiler.h"
 #include "Vdp1ComputeRasterizer.h"
 #include "Vdp1ComputeMath.h"
+#include "../vdp1texrow.h"
 
 #include <algorithm>
 #include <chrono>
@@ -220,6 +221,20 @@ Vdp1Renderer::~Vdp1Renderer() {
 
 void Vdp1Renderer::setPolygonMode(POLYGONMODE p) {
   proygonMode = p;
+}
+
+void Vdp1Renderer::discardPipelines() {
+  for (int i = 0; i < piplelines.size(); i++) {
+    pipleLineFactory->garbage(piplelines[i]);
+  }
+  piplelines.clear();
+  if (currentPipeLine != nullptr) {
+    pipleLineFactory->garbage(currentPipeLine);
+    currentPipeLine = nullptr;
+  }
+  // Earlier frames may still be executing with these pipelines.
+  vkQueueWaitIdle(vulkan->getVulkanQueue());
+  pipleLineFactory->deleteAllPipelines();
 }
 
 void Vdp1Renderer::setUp() {
@@ -668,6 +683,7 @@ void Vdp1Renderer::drawStart(void) {
   // SystemClipping / UserClipping per-cmd handlers (see L2334 / L2378).
   if (vulkan->getCurrentPolygonMode() != COMPUTE_RASTERIZER) {
     YglSprite sprite;
+    sprite.texrow_dmax = -1; // texture row stepping off unless set below
     sprite.vertices[0] = (s16)(Vdp1Regs->systemclipX1) * vdp1wratio;
     sprite.vertices[1] = (s16)(Vdp1Regs->systemclipY1) * vdp1hratio;
     sprite.vertices[2] = (s16)(Vdp1Regs->systemclipX2 + 1) * vdp1wratio;
@@ -1637,6 +1653,7 @@ void Vdp1Renderer::setTextureRatio(int vdp2widthratio, int vdp2heightratio) {
 void Vdp1Renderer::NormalSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer) {
   vdp1cmd_struct cmd;
   YglSprite sprite;
+  sprite.texrow_dmax = -1; // texture row stepping off unless set below
   CharTexture texture;
   TextureCache cash;
   u64 tmp;
@@ -1698,6 +1715,9 @@ void Vdp1Renderer::NormalSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer) {
     auto encoded = vdp1c::encodeNormalSprite(x0, y0, x1 - x0, y1 - y0,
                                              cmd.CMDSRCA, charSize, color, pmod,
                                              glm::ivec2(0, 0), flipBits, gouraudAddr);
+    // Line count / dot count from the raw Saturn vertices (local coordinate
+    // cancels in the edge differences).
+    encoded.lineSteps = vdp1c::packSpriteSteps(vdp1c::normalSpriteQuad(CMDXA, CMDYA, w, h));
     encoded.priority  = vc.priority;
     encoded.colorcl   = vc.colorcl;
     encoded.vdp2Attrs = vc.vdp2Attrs;
@@ -1723,6 +1743,13 @@ void Vdp1Renderer::NormalSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer) {
   sprite.vertices[5] = (int)((float)(y + sprite.h) * vdp1hratio);
   sprite.vertices[6] = (int)((float)x * vdp1wratio);
   sprite.vertices[7] = (int)((float)(y + sprite.h) * vdp1hratio);
+
+  {
+    // Hardware vertices (inclusive); the quad above covers whole cells.
+    const int raw[8] = {CMDXA, CMDYA, CMDXA + sprite.w - 1, CMDYA,
+                        CMDXA + sprite.w - 1, CMDYA + sprite.h - 1, CMDXA, CMDYA + sprite.h - 1};
+    vdp1_tess_line_params(raw, 1, &sprite.texrow_dmax, &sprite.texrow_k0, &sprite.texrow_k1);
+  }
 
   tmp = cmd.CMDSRCA;
   tmp <<= 16;
@@ -1799,6 +1826,7 @@ void Vdp1Renderer::NormalSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer) {
 void Vdp1Renderer::ScaledSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer) {
   vdp1cmd_struct cmd;
   YglSprite sprite;
+  sprite.texrow_dmax = -1; // texture row stepping off unless set below
   CharTexture texture;
   TextureCache cash;
   u64 tmp;
@@ -1905,6 +1933,9 @@ void Vdp1Renderer::ScaledSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer) {
     u16 color = fillComputeVdp2Attrs(&cmd, vc);
     auto encoded = vdp1c::encodeScaledSprite(verts, cmd.CMDSRCA, charSize, color, pmod,
                                              glm::ivec2(0, 0), flipBits, gouraudAddr);
+    encoded.lineSteps = vdp1c::packSpriteSteps({{
+      glm::ivec2(xc, yc), glm::ivec2(xc + rw, yc),
+      glm::ivec2(xc + rw, yc + rh), glm::ivec2(xc, yc + rh)}});
     encoded.priority  = vc.priority;
     encoded.colorcl   = vc.colorcl;
     encoded.vdp2Attrs = vc.vdp2Attrs;
@@ -2016,6 +2047,17 @@ void Vdp1Renderer::ScaledSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer) {
   sprite.vertices[6] = (int)((float)x * vdp1wratio);
   sprite.vertices[7] = (int)((float)(y + rh) * vdp1hratio);
 
+  {
+    // Line count from the hardware zoom vertices: the side edges are
+    // vertical with the raw (inclusive) height. The quad above covers
+    // whole cells.
+    const int rawH = (((cmd.CMDCTRL & 0xF00) >> 8) == 0x0)
+                         ? (int)(s16)cmd.CMDYC - (int)(s16)cmd.CMDYA
+                         : (int)(s16)cmd.CMDYB;
+    const int raw[8] = {0, 0, 0, 0, 0, rawH, 0, rawH};
+    vdp1_tess_line_params(raw, 1, &sprite.texrow_dmax, &sprite.texrow_k0, &sprite.texrow_k1);
+  }
+
   tmp = cmd.CMDSRCA;
   tmp <<= 16;
   tmp |= cmd.CMDCOLR;
@@ -2123,6 +2165,7 @@ void Vdp1Renderer::DistortedSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer
 
   vdp1cmd_struct cmd;
   YglSprite sprite;
+  sprite.texrow_dmax = -1; // texture row stepping off unless set below
   CharTexture texture;
   TextureCache cash;
   u64 tmp;
@@ -2183,6 +2226,8 @@ void Vdp1Renderer::DistortedSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer
     // inclusiveVerts/DILATE flags for its per-pixel pull rasterizer, but
     // the fallback is debug-only (useForwardMapping=false).
     auto encoded = vdp1c::encodeDistortedSprite(verts, cmd.CMDSRCA, charSize, color, pmod, glm::ivec2(0, 0), flipBits, gouraudAddr);
+    encoded.lineSteps = vdp1c::packSpriteSteps({{
+        glm::ivec2(A), glm::ivec2(B), glm::ivec2(C), glm::ivec2(D)}});
     encoded.priority  = vc.priority;
     encoded.colorcl   = vc.colorcl;
     encoded.vdp2Attrs = vc.vdp2Attrs;
@@ -2249,6 +2294,11 @@ void Vdp1Renderer::DistortedSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer
   sprite.vertices[5] = (s16)cmd.CMDYC;
   sprite.vertices[6] = (s16)cmd.CMDXD;
   sprite.vertices[7] = (s16)cmd.CMDYD;
+  // Hardware vertices for the texture line count; expandedQuad records
+  // whether the quad drawn below covers whole cells (see vdp1texrow.h).
+  const int rawVerts[8] = {(s16)cmd.CMDXA, (s16)cmd.CMDYA, (s16)cmd.CMDXB, (s16)cmd.CMDYB,
+                           (s16)cmd.CMDXC, (s16)cmd.CMDYC, (s16)cmd.CMDXD, (s16)cmd.CMDYD};
+  int expandedQuad = 0;
 #if 0
   isSquare = 0;
 #else
@@ -2257,6 +2307,21 @@ void Vdp1Renderer::DistortedSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer
       sprite.vertices[5] == sprite.vertices[7]) {
     sprite.vertices[5] += 1;
     sprite.vertices[7] += 1;
+    expandedQuad = 1;
+  } else if (proygonMode == GPU_TESSERATION &&
+             rawVerts[0] == rawVerts[6] && rawVerts[1] == rawVerts[7] &&
+             rawVerts[2] == rawVerts[4] && rawVerts[3] == rawVerts[5]) {
+    // One-line sprite (A == D, B == C): the hardware draws the single line
+    // A->B. The quad has no area and would draw nothing, so give it one cell
+    // of thickness across the line's minor axis.
+    if (abs(rawVerts[2] - rawVerts[0]) >= abs(rawVerts[3] - rawVerts[1])) {
+      sprite.vertices[5] += 1;
+      sprite.vertices[7] += 1;
+    } else {
+      sprite.vertices[4] += 1;
+      sprite.vertices[6] += 1;
+    }
+    expandedQuad = 1;
   } else {
 
     isSquare = 1;
@@ -2289,6 +2354,7 @@ void Vdp1Renderer::DistortedSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer
       int lt_index;
 
       sprite.dst = 0;
+      expandedQuad = 1;
 
       // find upper left opsition
       minx = 65535.0f;
@@ -2352,6 +2418,8 @@ void Vdp1Renderer::DistortedSpriteDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer
   }
 #endif
 #endif
+  vdp1_tess_line_params(rawVerts, expandedQuad, &sprite.texrow_dmax, &sprite.texrow_k0,
+                        &sprite.texrow_k1);
 
   sprite.vertices[0] = (sprite.vertices[0] + Vdp1Regs->localX) * vdp1wratio;
   sprite.vertices[1] = (sprite.vertices[1] + Vdp1Regs->localY) * vdp1hratio;
@@ -2442,6 +2510,7 @@ void Vdp1Renderer::SystemClipping(u8 *ram, Vdp1 *regs) {
   }
 
   YglSprite sprite = {};
+  sprite.texrow_dmax = -1; // texture row stepping off unless set below
 
   Vdp1Regs->systemclipX1 = 0;
   Vdp1Regs->systemclipY1 = 0;
@@ -2482,6 +2551,7 @@ void Vdp1Renderer::UserClipping(u8 *ram, Vdp1 *regs) {
   }
 
   YglSprite sprite = {};
+  sprite.texrow_dmax = -1; // texture row stepping off unless set below
 
   Vdp1Regs->userclipX1 = T1ReadWord(Vdp1Ram, Vdp1Regs->addr + 0xC);
   Vdp1Regs->userclipY1 = T1ReadWord(Vdp1Ram, Vdp1Regs->addr + 0xE);
@@ -2560,6 +2630,7 @@ void Vdp1Renderer::PolygonDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer) {
   u16 CMDPMOD;
   u8 alpha;
   YglSprite sprite;
+  sprite.texrow_dmax = -1; // texture row stepping off unless set below
   CharTexture texture;
   u16 color2;
   int i;
@@ -3282,6 +3353,7 @@ void Vdp1Renderer::PolylineDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer) {
   u16 CMDPMOD;
   u8 alpha;
   YglSprite polygon;
+  polygon.texrow_dmax = -1; // texture row stepping off unless set below
   CharTexture texture;
   TextureCache c;
   int priority = 0;
@@ -3578,6 +3650,7 @@ void Vdp1Renderer::LineDraw(u8 *ram, Vdp1 *regs, u8 *back_framebuffer) {
   u16 CMDPMOD;
   u8 alpha;
   YglSprite polygon;
+  polygon.texrow_dmax = -1; // texture row stepping off unless set below
   CharTexture texture;
   int priority = 0;
   float line_poygon[8];
@@ -4770,14 +4843,26 @@ int Vdp1Renderer::genPolygon(YglSprite *input, CharTexture *output, float *color
   // TESS?
   if (proygonMode == GPU_TESSERATION && prg != PG_VDP1_SYSTEM_CLIP && prg != PG_VDP1_USER_CLIP) {
 
-    tmp[0].texCoord[2] = 0.0f;
-    tmp[0].texCoord[3] = 1.0f;
-    tmp[1].texCoord[2] = 0.0f;
-    tmp[1].texCoord[3] = 1.0f;
-    tmp[2].texCoord[2] = 0.0f;
-    tmp[2].texCoord[3] = 1.0f;
-    tmp[3].texCoord[2] = 0.0f;
-    tmp[3].texCoord[3] = 1.0f;
+    if (input->texrow_dmax >= 0) {
+      // Texture row stepping (vdp1texrow.h): t = atlas row of texture row 0,
+      // r = line parameter (k0 on A-B, k1 on D-C), q = packed constants. The
+      // fragment shader picks the row; s keeps the usual interpolation.
+      const float packed = vdp1_tess_pack(input->texrow_dmax, input->h, (input->flip & 0x2) != 0);
+      for (int i = 0; i < 4; i++) {
+        tmp[i].texCoord[1] = (float)y;
+        tmp[i].texCoord[2] = (i < 2) ? input->texrow_k0 : input->texrow_k1;
+        tmp[i].texCoord[3] = packed;
+      }
+    } else {
+      tmp[0].texCoord[2] = 0.0f;
+      tmp[0].texCoord[3] = 1.0f;
+      tmp[1].texCoord[2] = 0.0f;
+      tmp[1].texCoord[3] = 1.0f;
+      tmp[2].texCoord[2] = 0.0f;
+      tmp[2].texCoord[3] = 1.0f;
+      tmp[3].texCoord[2] = 0.0f;
+      tmp[3].texCoord[3] = 1.0f;
+    }
 
     int lastVertex = program->vertices.size();
 

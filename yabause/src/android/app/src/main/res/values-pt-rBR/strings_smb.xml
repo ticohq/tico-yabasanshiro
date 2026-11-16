@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="smb_card_title">De pasta compartilhada (SMB)</string>
+    <string name="smb_card_desc">Importe imagens de jogos criadas a partir dos seus próprios discos, de um PC ou NAS da sua rede doméstica</string>
+    <string name="smb_dialog_title">Pasta compartilhada (SMB)</string>
+    <string name="smb_pc_hint">Compartilhe uma pasta no Windows (Propriedades &gt; Compartilhamento). No host, digite o endereço IP deste PC na rede doméstica: execute ipconfig no Prompt de Comando e use o Endereço IPv4 (por exemplo, 192.168.x.x). Entre com uma conta local do Windows que tenha acesso à pasta; contas Microsoft muitas vezes não conseguem entrar em pastas compartilhadas.</string>
+    <string name="smb_host">Nome do host ou endereço IP</string>
+    <string name="smb_share">Nome do compartilhamento</string>
+    <string name="smb_username">Nome de usuário (opcional)</string>
+    <string name="smb_password">Senha</string>
+    <string name="smb_domain">Domínio (opcional)</string>
+    <string name="smb_remember">Lembrar esta conexão</string>
+    <string name="smb_connect">Conectar</string>
+    <string name="smb_import">Importar</string>
+    <string name="smb_import_count">Importar (%1$d)</string>
+    <string name="smb_cancel_import">Cancelar importação</string>
+    <string name="smb_up_folder">.. (subir uma pasta)</string>
+    <string name="smb_empty">Não há pastas nem arquivos de jogo aqui</string>
+    <string name="smb_progress_format">%1$s\n%2$d / %3$d arquivos, %4$s de %5$s</string>
+    <string name="smb_extracting">Extraindo %1$s</string>
+    <string name="smb_error_host_required">Digite o host e o nome do compartilhamento</string>
+    <string name="smb_error_auth">Falha ao entrar. Verifique o nome de usuário, a senha e o domínio.</string>
+    <string name="smb_error_share_not_found">O compartilhamento não foi encontrado. Verifique o nome.</string>
+    <string name="smb_error_unreachable">Não foi possível acessar o host. Verifique o endereço e se o compartilhamento de arquivos está ativado.</string>
+    <string name="smb_error_timeout">O host não respondeu a tempo.</string>
+    <string name="smb_error_access_denied">Acesso negado.</string>
+    <string name="smb_error_not_found">Um arquivo não foi encontrado no compartilhamento.</string>
+    <string name="smb_error_other">Erro da pasta compartilhada: %1$s</string>
+    <string name="smb_import_done">%1$d jogo(s) importado(s)</string>
+    <string name="smb_import_cancelled">Importação cancelada</string>
+    <string name="smb_import_no_game">Nenhum jogo foi encontrado nos arquivos importados</string>
+    <string name="smb_purpose_hint">Importe imagens de jogos criadas a partir de discos que você possui, de uma pasta compartilhada em um PC ou NAS da mesma rede. Servidores da internet não podem ser usados.</string>
+    <string name="smb_error_not_local">Só é possível usar PCs e NAS da sua rede local. Digite um endereço local, como 192.168.x.x.</string>
+    <string name="smb_free_limit_none">A versão gratuita aceita até %1$d jogos. Assine para adicionar mais.</string>
+    <string name="smb_free_limit_some">A versão gratuita aceita até %1$d jogos: é possível adicionar mais %2$d, mas %3$d foram selecionados. Selecione menos jogos ou assine.</string>
+</resources>

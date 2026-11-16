@@ -55,6 +55,7 @@ extern "C" {
 #include "sndsdl.h"
 #include "osdcore.h"
 #include "ygl.h"
+#include "vdpdump.h"
 //#include "../sh2_dynarec_devmiyax/DynarecSh2.h"
 
 #ifdef _WINDOWS
@@ -127,6 +128,36 @@ int g_scsp_sync = 1;
 int g_frame_skip = 1;
 int g_emulated_bios = 1;
 char * playdataPath = NULL;
+
+// --vdp-dump developer mode: render a raw VDP1/VDP2 dump without running
+// the SH-2 and save the composed output as PNG (see vdpdump.c).
+static std::string s_vdp_dump_prefix;
+static std::string s_vdp_dump_out;
+static int s_vdp_dump_frames = 3;
+// --rbg-res=N developer override of the rotation scroll resolution
+// (an RBG_RESOLUTION_MODE value). The default stays 1080P.
+static int s_rbg_res = RBG_RES_1080P;
+static bool isVdpDumpMode() { return !s_vdp_dump_prefix.empty(); }
+// --polygon-mode=N developer override of the VDP1 polygon mode.
+static int s_polygon_mode = COMPUTE_RASTERIZER;
+// --filter-mode=N output filter (an AAMODE value), --rotate-screen=0|1
+// "Rotate 90 degree", --vdp-dump-filters=a,b,... the filter of each replayed
+// dump frame (the last one stays; switched at run time the way a settings
+// change is) and --vdp-dump-size=WxH a fixed window size for the dump.
+static int s_filter_mode = 0;
+static int s_rotate_screen = 0;
+static std::vector<int> s_vdp_dump_filters;
+static int s_vdp_dump_w = 0;
+static int s_vdp_dump_h = 0;
+// --crt-test-pretransform=N: the CRT pass draws as if the swapchain had N
+// quarter turns of pre-transform (a desktop check of the Android path)
+static int s_crt_test_pretransform = -1;
+// a fixed dump size is never saved as the user's window size
+static bool keepWindowSize() { return isVdpDumpMode() && s_vdp_dump_w > 0; }
+// --vdp-dump-fullscreen: the window is laid out as a full-screen one (the
+// way Android does), so a portrait window puts the output at the top
+static bool s_vdp_dump_fullscreen = false;
+static int resizeFullScreen() { return (isVdpDumpMode() && s_vdp_dump_fullscreen) ? 1 : 0; }
 
 const char * YuiGetShaderCachePath() {
   return "./";
@@ -247,6 +278,14 @@ int yabauseinit()
   //yinit.sndcoretype = SNDCORE_DUMMY;
   //yinit.cdcoretype = CDCORE_DEFAULT;
   yinit.cdcoretype = CDCORE_ISO;
+  if (isVdpDumpMode()) {
+    // No disc and no audio: nothing but the VDPs is driven in this mode.
+    // With the HLE BIOS and no disc YabauseInit() reports -2 (no game)
+    // after every subsystem is initialized, which is accepted below.
+    yinit.cdcoretype = CDCORE_DUMMY;
+    yinit.sndcoretype = SNDCORE_DUMMY;
+    cdpath[0] = '\0';
+  }
   yinit.carttype = CART_DRAM32MBIT;
   yinit.regionid = 0;
   yinit.biospath = biospath;
@@ -263,9 +302,8 @@ int yabauseinit()
   yinit.framelimit = 0;
   yinit.usethreads = 0;
   yinit.skip_load = 0;
-  yinit.video_filter_type = 0;
-  //yinit.polygon_generation_mode = GPU_TESSERATION; //COMPUTE_RASTERIZER;
-  yinit.polygon_generation_mode = COMPUTE_RASTERIZER;
+  yinit.video_filter_type = s_filter_mode;
+  yinit.polygon_generation_mode = (POLYGONMODE)s_polygon_mode;
   yinit.use_new_scsp = 1;
   // Match the proven Qt/Android timing model. Without these, yinit={} leaves
   // scsp_main_mode=0 which selects ScspAsynMainCpuTime (strict per-frame
@@ -277,10 +315,10 @@ int yabauseinit()
   // turns this on; leaving it 0 makes the devmiyax dynarec take its no-cache
   // memory paths and hangs cache-sensitive games (e.g. Dracula X) after a while.
   yinit.use_sh2_cache = 1;
-  yinit.rotate_screen = 0;
+  yinit.rotate_screen = s_rotate_screen;
   yinit.playRecordPath = playdataPath;
-  yinit.rbg_resolution_mode = RBG_RES_1080P;
-  yinit.resolution_mode = RES_NATIVE;
+  yinit.rbg_resolution_mode = (RBG_RESOLUTION_MODE)s_rbg_res;
+  yinit.resolution_mode = (RESOLUTION_MODE)g_resolution_mode;
   yinit.extend_backup = 1;
 
   res = YabauseInit(&yinit);
@@ -440,8 +478,8 @@ static void saveWindowSize(int w, int h) {
 }
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
-  VIDCore->Resize(0, 0, width, height, 0, 0);
-  saveWindowSize(width, height);
+  VIDCore->Resize(0, 0, width, height, resizeFullScreen(), 0);
+  if (!keepWindowSize()) saveWindowSize(width, height);
 }
 
 class ScreenRecorder {
@@ -484,7 +522,18 @@ int main( int argc, char *argv[] )
       printf("  -t         --tile-binning                 enable Phase B1 tile-binning rasterizer\n");
       printf("  -fd NUMBER --frame-debug NUMBER          auto-pause and open frame debugger after N emulated frames\n");
       printf("  -p STRING  --playrecord STRING           playback recorded input from directory\n");
-      printf("  -v         --version\n");
+      printf("  --vdp-dump=PREFIX                        render the VDP dump PREFIX_{vdp2vram,vdp2cram,vdp2regs,vdp1vram,vdp1regs}.bin without CPU\n");
+      printf("  --vdp-dump-out=FILE.png                  output image for --vdp-dump (required)\n");
+      printf("  --vdp-dump-frames=N                      frames to render for --vdp-dump (default 3)\n");
+      printf("  --rbg-res=N                              rotation scroll resolution: 0 original, 1 2x, 2 720P, 3 1080P (default), 4 fit, 5 4x\n");
+      printf("  --polygon-mode=N                         VDP1 polygon mode: 0 perspective, 1 CPU tess, 2 GPU tess, 3 compute (default)\n");
+      printf("  --filter-mode=N                          output filter: 0 none (default), 4 CRT Hyllian, 5 CRT Lottes, 6 CRT NewPixie\n");
+      printf("  --rotate-screen=0|1                      rotate the picture 90 degrees\n");
+      printf("  --vdp-dump-filters=a,b,...               filter of each replayed --vdp-dump frame (the last one stays)\n");
+      printf("  --vdp-dump-size=WxH                      window size for --vdp-dump\n");
+      printf("  --crt-test-pretransform=N                --vdp-dump: CRT output as for N quarter turns of swapchain pre-transform\n");
+      printf("  --vdp-dump-fullscreen                    --vdp-dump: lay the window out as a full-screen one (portrait: output at the top)\n");
+      printf("  -v        --version\n");
       exit(0);
     }
   }
@@ -500,6 +549,11 @@ int main( int argc, char *argv[] )
     }
     else if ((x == "-r" || x == "--resolution_mode") && (i + 1 < all_args.size())) {
       g_resolution_mode = std::stoi(all_args[i + 1]);
+      if (g_resolution_mode < RES_NATIVE || g_resolution_mode > RES_1080P) {
+        printf("-r %d is out of range (0 .. %d); using 0 (Native)\n",
+               g_resolution_mode, (int)RES_1080P);
+        g_resolution_mode = RES_NATIVE;
+      }
     }
     else if ((x == "-a" || x == "--keep_aspect_rate")) {
       g_keep_aspect_rate = 1;
@@ -532,6 +586,87 @@ int main( int argc, char *argv[] )
       playdataPath = (char*)malloc(len + 1);
       strcpy(playdataPath, all_args[i + 1].c_str());
     }
+    else if (x.rfind("--vdp-dump=", 0) == 0) {
+      s_vdp_dump_prefix = x.substr(strlen("--vdp-dump="));
+    }
+    else if (x.rfind("--vdp-dump-out=", 0) == 0) {
+      s_vdp_dump_out = x.substr(strlen("--vdp-dump-out="));
+    }
+    else if (x.rfind("--vdp-dump-frames=", 0) == 0) {
+      try {
+        int v = std::stoi(x.substr(strlen("--vdp-dump-frames=")));
+        if (v > 0) s_vdp_dump_frames = v;
+      } catch (...) {
+        std::cout << "[VDPDUMP] invalid --vdp-dump-frames value, using "
+                  << s_vdp_dump_frames << std::endl;
+      }
+    }
+    else if (x.rfind("--polygon-mode=", 0) == 0) {
+      try {
+        int v = std::stoi(x.substr(strlen("--polygon-mode=")));
+        if (v >= PERSPECTIVE_CORRECTION && v <= COMPUTE_RASTERIZER) s_polygon_mode = v;
+      } catch (...) {
+        std::cout << "invalid --polygon-mode value, using "
+                  << s_polygon_mode << std::endl;
+      }
+    }
+    else if (x.rfind("--filter-mode=", 0) == 0) {
+      try {
+        s_filter_mode = std::stoi(x.substr(strlen("--filter-mode=")));
+      } catch (...) {
+        std::cout << "invalid --filter-mode value, using 0" << std::endl;
+        s_filter_mode = 0;
+      }
+    }
+    else if (x.rfind("--rotate-screen=", 0) == 0) {
+      try {
+        s_rotate_screen = std::stoi(x.substr(strlen("--rotate-screen="))) != 0;
+      } catch (...) {
+        s_rotate_screen = 0;
+      }
+    }
+    else if (x.rfind("--vdp-dump-filters=", 0) == 0) {
+      const std::string list = x.substr(strlen("--vdp-dump-filters="));
+      size_t pos = 0;
+      while (pos < list.size()) {
+        size_t comma = list.find(',', pos);
+        if (comma == std::string::npos) comma = list.size();
+        try {
+          if (comma > pos) s_vdp_dump_filters.push_back(std::stoi(list.substr(pos, comma - pos)));
+        } catch (...) {
+          std::cout << "[VDPDUMP] invalid --vdp-dump-filters entry, skipped" << std::endl;
+        }
+        pos = comma + 1;
+      }
+    }
+    else if (x.rfind("--vdp-dump-size=", 0) == 0) {
+      int sw = 0, sh = 0;
+      if (sscanf(x.c_str() + strlen("--vdp-dump-size="), "%dx%d", &sw, &sh) == 2 && sw >= 64 && sh >= 64) {
+        s_vdp_dump_w = sw;
+        s_vdp_dump_h = sh;
+      } else {
+        std::cout << "[VDPDUMP] invalid --vdp-dump-size value, ignored" << std::endl;
+      }
+    }
+    else if (x == "--vdp-dump-fullscreen") {
+      s_vdp_dump_fullscreen = true;
+    }
+    else if (x.rfind("--crt-test-pretransform=", 0) == 0) {
+      try {
+        s_crt_test_pretransform = std::stoi(x.substr(strlen("--crt-test-pretransform="))) & 3;
+      } catch (...) {
+        s_crt_test_pretransform = -1;
+      }
+    }
+    else if (x.rfind("--rbg-res=", 0) == 0) {
+      try {
+        int v = std::stoi(x.substr(strlen("--rbg-res=")));
+        if (v >= RBG_RES_ORIGINAL && v <= RBG_RES_4x) s_rbg_res = v;
+      } catch (...) {
+        std::cout << "[VDPDUMP] invalid --rbg-res value, using "
+                  << s_rbg_res << std::endl;
+      }
+    }
     else if ((x == "-v" || x == "--version")) {
       printf("YabaSanshiro version %s(%s)\n", YAB_VERSION, GIT_SHA1);
       return 0;
@@ -541,6 +676,15 @@ int main( int argc, char *argv[] )
   enable_tile_binning = true;
   gsc.setScreenshotCallback(PlayRecorder::getInstance());
 
+  if (isVdpDumpMode()) {
+    if (s_vdp_dump_out.empty()) {
+      printf("[VDPDUMP] --vdp-dump-out=FILE.png is required with --vdp-dump\n");
+      return 1;
+    }
+    // Keep the FPS overlay out of the captured image.
+    g_EnagleFPS = 0;
+  }
+
 
 
   SDL_Init(SDL_INIT_AUDIO);
@@ -548,14 +692,25 @@ int main( int argc, char *argv[] )
   int width = 800;
   int height = 600;
   loadWindowSize(width, height);
+  if (isVdpDumpMode() && s_vdp_dump_w > 0) {
+    width = s_vdp_dump_w;
+    height = s_vdp_dump_h;
+  }
+  // A dump replay is a background developer run: keep its window off the
+  // primary display and never take focus.
+  WindowPlaceOffPrimaryMonitor(isVdpDumpMode());
   auto w = r.OpenWindow(width, height, "Yaba sanshiro Vulkan",nullptr);
   VIDVulkan::getInstance()->setRenderer(&r);
+  if (isVdpDumpMode() && s_crt_test_pretransform >= 0)
+    VIDVulkan::getInstance()->setCrtTestPreTransform(s_crt_test_pretransform);
 
   int rtn;
   rtn = yabauseinit();
   if (rtn != 0) {
     return -1;
   }
+  int vdp_dump_rc = 0;
+  int vdp_dump_done_frames = 0;
 
   // -l / --autoload: try slot 1 right after init. YabLoadStateSlot returns
   // non-zero when the .yss file is missing for the loaded disc; in that case
@@ -570,7 +725,7 @@ int main( int argc, char *argv[] )
     }
   }
 
-  VIDCore->Resize(0, 0, width, height, 0,0);
+  VIDCore->Resize(0, 0, width, height, resizeFullScreen(), 0);
 
   // Phase B1: tile-binning rasterizer is now always-on inside
   // Vdp1ComputeRasterizer; the CLI flag and runtime toggle were removed
@@ -628,6 +783,30 @@ int main( int argc, char *argv[] )
       // VDP1 offscreen image and present so the Offscreen Preview panel
       // (and the rest of the ImGui overlay) reflect the new step value.
       g_debugUI.renderPausedFrame();
+    } else if (isVdpDumpMode()) {
+      // Developer mode: replay the dump every frame; no CPU runs.
+      if (!s_vdp_dump_filters.empty()) {
+        const size_t k = (size_t)vdp_dump_done_frames < s_vdp_dump_filters.size()
+                             ? (size_t)vdp_dump_done_frames : s_vdp_dump_filters.size() - 1;
+        VideoSetSetting(VDP_SETTING_FILTERMODE, s_vdp_dump_filters[k]);
+        printf("[VDPDUMP] frame %d filter %d\n", vdp_dump_done_frames + 1, s_vdp_dump_filters[k]);
+      }
+      if (VdpDumpRunFrame(s_vdp_dump_prefix.c_str()) != 0) {
+        printf("[VDPDUMP] cannot load dump %s\n", s_vdp_dump_prefix.c_str());
+        vdp_dump_rc = 1;
+        break;
+      }
+      ++emulated_frames;
+      if (++vdp_dump_done_frames >= s_vdp_dump_frames) {
+        if (saveScreenshot(s_vdp_dump_out.c_str()) != 0) {
+          printf("[VDPDUMP] failed to write %s\n", s_vdp_dump_out.c_str());
+          vdp_dump_rc = 1;
+        } else {
+          printf("[VDPDUMP] wrote %s after %d frames\n",
+                 s_vdp_dump_out.c_str(), vdp_dump_done_frames);
+        }
+        break;
+      }
     } else {
       YabauseExec();        // exec one frame
       ++emulated_frames;
@@ -639,7 +818,8 @@ int main( int argc, char *argv[] )
   // Save final window size on clean shutdown (the resize callback also
   // saves on every resize, but capturing it again here covers the case
   // where the user moved/resized in window manager and we missed events).
-  {
+  // A dump run with a fixed size must not become the next run's size.
+  if (!keepWindowSize()) {
     int sw = 0, sh = 0;
     glfwGetWindowSize(w->getWindowHandle(), &sw, &sh);
     saveWindowSize(sw, sh);
@@ -648,7 +828,7 @@ int main( int argc, char *argv[] )
   g_debugUI.shutdown();
   YabauseDeInit();
 
-  return 0;
+  return vdp_dump_rc;
 
 }
 

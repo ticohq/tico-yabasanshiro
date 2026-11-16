@@ -271,6 +271,39 @@ void ScspCommitSh2SoundRamWrites(void);
 
 extern int use_new_scsp;
 
+// High-quality output of the new SCSP (sound_hq/scsp_hq.h): band-limited
+// waveform interpolation and a floating-point mix, rendered from what the
+// chip played. Off by default; the chip itself is unchanged either way. Has
+// no effect with the old SCSP (use_new_scsp == 0). Any thread.
+void ScspSetHighQuality(int on);
+int ScspGetHighQuality(void);
+
+// Developer hook: while the high-quality output is on, receives for each
+// sample the chip's own output and the high-quality output that replaces it
+// (SCSP thread).
+extern void (*scsp_hq_chip_output_hook)(s16 chip_l, s16 chip_r, s16 hq_l, s16 hq_r);
+
+// Float effect DSP of the high-quality output (sound_hq/dsp_float.h): the
+// chip's DSP program runs a second time in floating point, fed with the
+// high-quality voices, and its outputs replace the chip's. 0 off (default),
+// 1 on, 2 on but fed with the chip's own sends (developer verification of the
+// DSP arithmetic). Only acts while ScspSetHighQuality(1). Any thread.
+void ScspSetHighQualityFloatDsp(int mode);
+int ScspGetHighQualityFloatDsp(void);
+// Developer statistics: samples where the float DSP took its state from the
+// chip instead of running (first sample, program or parameter changes).
+u32 ScspHqGetFloatDspSeedCount(void);
+
+// Developer hook: while the float DSP is on, receives for each sample the
+// effect returns (EFREG through EFSDL/EFPAN and the master volume, on the
+// output's scale) of the chip's DSP and of the float DSP (SCSP thread).
+extern void (*scsp_hq_fx_output_hook)(const float chip[2], const float flt[2]);
+
+// Developer statistics, counted only while the high-quality output is on:
+// per slot, key ons executed by keyon(), key ons the taps carried, and op2
+// captures that saw sample_counter == 0 (the earlier detection).
+void ScspHqGetKeyOnStats(u32 keyon_calls[32], u32 tap_keyons[32], u32 counter_zero[32]);
+
 #if defined (__cplusplus)
 }
 #endif

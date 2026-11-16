@@ -116,6 +116,11 @@ typedef struct
    u32 k_mem_type;
    u32 over_pattern_name;
    int linecoefenab;
+   // VRAM banks (bit b = bank b, 128 KB each) this screen may read pattern
+   // names / character and bitmap data from. See vdp2_rotbank.h.
+   // Keep these last: the RBG compute shader mirrors this layout.
+   u32 nt_bank_mask;
+   u32 cg_bank_mask;
    //void FASTCALL(*PlaneAddr)(void *, int, Vdp2*);
 } vdp2rotationparameter_struct;
 

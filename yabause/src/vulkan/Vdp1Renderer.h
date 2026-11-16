@@ -183,6 +183,10 @@ public:
     return (vdp2Height > 0) ? (float)height / (float)vdp2Height : 1.0f;
   }
   void setPolygonMode(POLYGONMODE p);
+  // Destroys every cached graphics pipeline of the VDP1 factory. The cached
+  // pipelines bake in the polygon mode they were built for (topology, tess
+  // stages, vertex shader), so they must not be reused after a mode switch.
+  void discardPipelines();
 
 protected:
 

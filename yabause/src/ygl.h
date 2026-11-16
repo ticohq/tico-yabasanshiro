@@ -242,6 +242,12 @@ typedef struct {
     s32 cob;
     int linescreen;
 	int id;
+	/* VDP1 texture row stepping in the GPU tessellation path (vdp1texrow.h).
+	   texrow_dmax < 0 turns it off (polygons, lines, clip rectangles).
+	   texrow_k0 / texrow_k1: line parameter on the A-B and D-C edges. */
+	int texrow_dmax;
+	float texrow_k0;
+	float texrow_k1;
 } YglSprite;
 
 typedef struct {
@@ -516,7 +522,19 @@ typedef enum
   AA_FXAA,
   AA_SCANLINE_FILTER,
   AA_BILNEAR_FILTER,
+  /* CRT mode (crt/README.md): the picture at the Saturn's own resolution,
+     scaled up through one of RetroArch's CRT shaders. Appended, never
+     inserted: the values are stored in the user's settings. */
+  AA_CRT_HYLLIAN,
+  AA_CRT_LOTTES,
+  AA_CRT_NEWPIXIE,
 } AAMODE;
+
+#define YGL_IS_CRT_MODE(m) ((m) >= AA_CRT_HYLLIAN && (m) <= AA_CRT_NEWPIXIE)
+
+/* Recompute the effective resolution_mode / rbg_resolution_mode from the
+   filter and the user's settings (vidogl.c). */
+void VIDOGLApplyEffectiveResolution(void);
 
 typedef enum
 {
@@ -583,6 +601,10 @@ typedef struct {
    int user_originy;
    int originx;
    int originy;
+   // 1 when SetSaturnResolution put the output at the top of the window
+   // (full screen, picture limited by the window's width); the CRT mode
+   // places its picture the same way
+   int output_top;
    unsigned int width;
    unsigned int height;
    unsigned int depth;
@@ -653,8 +675,15 @@ typedef struct {
 
    AAMODE aamode;
    POLYGONMODE polygonmode;
+   /* resolution_mode and rbg_resolution_mode are the effective values the
+      renderer reads; user_* are the ones the settings asked for. They differ
+      only while a CRT filter is selected, which renders at the Saturn's own
+      resolution (RES_ORIGINAL / RBG_RES_ORIGINAL). See
+      VIDOGLApplyEffectiveResolution in vidogl.c. */
    RESOLUTION_MODE resolution_mode;
    RBG_RESOLUTION_MODE rbg_resolution_mode;
+   RESOLUTION_MODE user_resolution_mode;
+   RBG_RESOLUTION_MODE user_rbg_resolution_mode;
    int rbg_use_compute_shader;
    YglTextureManager * texture_manager;
    GLsync sync;

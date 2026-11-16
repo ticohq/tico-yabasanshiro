@@ -39,7 +39,10 @@ import com.google.android.material.bottomsheet.BottomSheetDialog
 import com.google.android.material.bottomsheet.BottomSheetDialogFragment
 import com.google.android.material.card.MaterialCardView
 import org.devmiyax.yabasanshiro.R
+import org.uoyabause.android.DeviceCapabilities
+import org.uoyabause.android.GameSelectPresenter
 import org.uoyabause.android.YabauseApplication
+import org.uoyabause.android.smb.SmbShareDialogFragment
 
 class AddGameBottomSheetFragment : BottomSheetDialogFragment() {
     interface Listener {
@@ -52,12 +55,22 @@ class AddGameBottomSheetFragment : BottomSheetDialogFragment() {
         fun onScanFolder(path: String)
 
         fun onScanAllFolders()
+
+        /**
+         * Presenter the SMB import uses to check the free limit, ask for the
+         * install storage and register a single imported game.
+         */
+        fun getImportPresenter(): GameSelectPresenter? = null
+
+        /** Called after several games were copied in; the host rescans its library. */
+        fun onGamesInstalled() {}
     }
 
     private var mListener: Listener? = null
     private var mAdapter: ScanFolderAdapter? = null
     private var mRecyclerView: RecyclerView? = null
     private var mTextEmptyFolders: TextView? = null
+    private var isPc = false
     private var mDirectoryManager: GameDirectoryManager? = null
 
     private lateinit var filePickerLauncher: ActivityResultLauncher<Intent>
@@ -123,6 +136,7 @@ class AddGameBottomSheetFragment : BottomSheetDialogFragment() {
 
         val prefs = PreferenceManager.getDefaultSharedPreferences(requireContext())
         mDirectoryManager = GameDirectoryManager(prefs)
+        isPc = DeviceCapabilities.isPc(requireContext())
 
         view.findViewById<MaterialCardView>(R.id.card_select_file).setOnClickListener {
             launchFilePicker()
@@ -130,6 +144,10 @@ class AddGameBottomSheetFragment : BottomSheetDialogFragment() {
 
         view.findViewById<MaterialCardView>(R.id.card_add_folder).setOnClickListener {
             launchFolderPicker()
+        }
+
+        view.findViewById<MaterialCardView>(R.id.card_smb_share).setOnClickListener {
+            launchSmbShare()
         }
 
         view.findViewById<Button>(R.id.button_scan_all).setOnClickListener {
@@ -168,6 +186,7 @@ class AddGameBottomSheetFragment : BottomSheetDialogFragment() {
         if (!YabauseApplication.isPro()) {
             applyScanSectionFreeState(view)
         }
+        applyPlatformOptions(view)
     }
 
     private fun applyScanSectionFreeState(view: View) {
@@ -196,6 +215,15 @@ class AddGameBottomSheetFragment : BottomSheetDialogFragment() {
         } catch (e: android.content.ActivityNotFoundException) {
             showNoFileManagerMessage()
         }
+    }
+
+    private fun launchSmbShare() {
+        val listener = mListener ?: return
+        val fm = parentFragmentManager
+        if (fm.findFragmentByTag(SmbShareDialogFragment.TAG) != null) return
+        // Shown through the host's fragment manager so it outlives this sheet.
+        SmbShareDialogFragment.newInstance(listener).show(fm, SmbShareDialogFragment.TAG)
+        dismiss()
     }
 
     private fun launchFolderPicker() {
@@ -259,8 +287,27 @@ class AddGameBottomSheetFragment : BottomSheetDialogFragment() {
     }
 
     private fun updateEmptyState(isEmpty: Boolean) {
+        if (isPc) return // the folder list is hidden on Google Play Games on PC
         mTextEmptyFolders?.visibility = if (isEmpty) View.VISIBLE else View.GONE
         mRecyclerView?.visibility = if (isEmpty) View.GONE else View.VISIBLE
+    }
+
+    /**
+     * Google Play Games on PC: the system file and folder pickers only see the
+     * VM's internal storage, so the shared folder is the only way to bring games
+     * in, and it is the only option shown. Other devices use the pickers and do
+     * not show the shared folder.
+     */
+    private fun applyPlatformOptions(view: View) {
+        val pcOnly = if (isPc) View.VISIBLE else View.GONE
+        val nonPc = if (isPc) View.GONE else View.VISIBLE
+        view.findViewById<View>(R.id.card_smb_share).visibility = pcOnly
+        view.findViewById<View>(R.id.import_cards_row).visibility = nonPc
+        view.findViewById<View>(R.id.scan_section_header).visibility = nonPc
+        if (isPc) {
+            mRecyclerView?.visibility = View.GONE
+            mTextEmptyFolders?.visibility = View.GONE
+        }
     }
 
     companion object {

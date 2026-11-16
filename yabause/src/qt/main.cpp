@@ -24,8 +24,13 @@
 
 #include "QtYabause.h"
 #include "Settings.h"
+#include "VolatileSettings.h"
 #include "ui/UIYabause.h"
 #include "ui/UISetupWizard.h"
+#include "YabauseThread.h"
+#include <QScreen>
+#include <QWindow>
+#include <stdio.h>
 #include "services/PreferenceManager.h"
 #ifndef NO_CLI
 #include "Arguments.h"
@@ -87,7 +92,8 @@ int main( int argc, char** argv )
 #endif
 	// First-launch onboarding. It runs before the main window exists, so a
 	// video core change here needs no restart.
-	if ( UISetupWizard::shouldRun() )
+	const bool vdpDump = YabauseThread::vdpDumpMode();
+	if ( !vdpDump && UISetupWizard::shouldRun() )
 	{
 		UISetupWizard wizard;
 		wizard.exec();
@@ -95,7 +101,46 @@ int main( int argc, char** argv )
 
 	// show main window
 	QtYabause::mainWindow()->setWindowTitle( app.applicationName() );
-	QtYabause::mainWindow()->show();
+	if ( vdpDump )
+	{
+		// A dump replay is a background developer run: put the window on the
+		// first screen that is not the primary one (the primary only when it
+		// is the sole screen) before it is first shown, and show it without
+		// activation so it never takes focus.
+		QWidget* w = QtYabause::mainWindow();
+		QScreen* primary = QGuiApplication::primaryScreen();
+		QScreen* chosen = primary;
+		foreach ( QScreen* s, QGuiApplication::screens() )
+		{
+			if ( s != primary ) { chosen = s; break; }
+		}
+		const QRect area = chosen->availableGeometry();
+		w->setAttribute( Qt::WA_ShowWithoutActivating );
+		w->setWindowState( Qt::WindowNoState );
+		w->resize( 1024, 768 );
+		// --vdp-dump-size=WxH: pin the emulation view (the central widget,
+		// which the GL widget fills) to W x H device pixels; the main window
+		// grows around it.
+		const QStringList dumpSize = QtYabause::volatileSettings()->value( "VdpDump/Size" ).toString().split( 'x' );
+		if ( dumpSize.size() == 2 && dumpSize[0].toInt() > 0 && dumpSize[1].toInt() > 0 )
+		{
+			const qreal dpr = chosen->devicePixelRatio();
+			QtYabause::mainWindow()->centralWidget()->setFixedSize(
+				(int)( dumpSize[0].toInt() / dpr + 0.5 ), (int)( dumpSize[1].toInt() / dpr + 0.5 ) );
+		}
+		w->move( area.topLeft() + QPoint( 50, 50 ) );
+		printf( "[WINPLACE] screens=%d chosen=%s origin=(%d,%d) primary=%s origin=(%d,%d) on_primary=%d\n",
+		        (int)QGuiApplication::screens().size(), chosen->name().toLocal8Bit().constData(),
+		        area.x(), area.y(), primary->name().toLocal8Bit().constData(),
+		        primary->geometry().x(), primary->geometry().y(), chosen == primary ? 1 : 0 );
+		w->show();
+		QScreen* now = w->windowHandle() ? w->windowHandle()->screen() : nullptr;
+		printf( "[WINPLACE] window pos=(%d,%d) screen=%s\n", w->x(), w->y(),
+		        now ? now->name().toLocal8Bit().constData() : "(none)" );
+		fflush( stdout );
+	}
+	else
+		QtYabause::mainWindow()->show();
 	// connection
 	QObject::connect( &app, SIGNAL( lastWindowClosed() ), &app, SLOT( quit() ) );
 	// exec application

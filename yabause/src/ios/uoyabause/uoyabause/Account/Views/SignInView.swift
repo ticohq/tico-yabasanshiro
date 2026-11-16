@@ -84,8 +84,11 @@ final class SignInViewModel: ObservableObject {
                 return
             }
             appleRawNonce = nil
-            let firebaseCredential = OAuthProvider.credential(
-                withProviderID: "apple.com", idToken: idToken, rawNonce: rawNonce)
+            // Firebase 12 made the generic credential(withProviderID:idToken:rawNonce:)
+            // overload Objective-C only. appleCredential() is the Swift entry point and
+            // also forwards fullName, which Apple returns only on the first sign-in.
+            let firebaseCredential = OAuthProvider.appleCredential(
+                withIDToken: idToken, rawNonce: rawNonce, fullName: credential.fullName)
             signIn(with: firebaseCredential)
         }
     }

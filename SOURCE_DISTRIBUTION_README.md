@@ -1,6 +1,6 @@
-# YabaSanshiro 1.20.46 - Source Distribution (GPL)
+# YabaSanshiro 1.20.55 - Source Distribution (GPL)
 
-This archive is the corresponding source for YabaSanshiro 1.20.46,
+This archive is the corresponding source for YabaSanshiro 1.20.55,
 provided to comply with the GNU General Public License.
 
 ## Sanitized / redacted for security
@@ -25,13 +25,15 @@ Files with a secret value redacted to a placeholder:
 - `yabause/src/ios/uoyabause/uoyabause/Info-lite.plist`
 - `yabause/src/ios/uoyabause/uoyabause/Info.plist`
 - `yabause/src/ios/uoyabause/uoyabause/Info-lite.plist`
+- `yabause/src/android/app/src/test/java/org/uoyabause/android/DiscordWebhookTest.kt`
 
 Agent tooling/configuration (`.claude`, `.agents`, etc.), instruction files
 (`CLAUDE.md`, `AGENTS.md`), internal docs (`docs/`), release/agent skills
 (`skills/`), developer tools (`tools/`), the Windows regression-test template
 (`win_template/`), and CI / build-wrapper files (`.gitlab-ci.yml`,
-`buildwin.bat`, `docker-compose.yml`) are also omitted; they are not part of
-the emulator program. The core build system (CMake / Gradle / Xcode project)
+`buildwin.bat`, `docker-compose.yml`), store listing text and store deployment
+tooling (`release_notes/`, fastlane lanes, screenshot generators) and internal
+planning notes are also omitted; they are not part of the emulator program. The core build system (CMake / Gradle / Xcode project)
 is kept, so the source still builds.
 
 ## Building from this archive

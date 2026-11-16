@@ -649,6 +649,34 @@ internal class PadManagerV16 : PadManager() {
 
     override fun getPlayer1InputDevice(): Int = if (pads[0] == null) -1 else pads[0]!!.selectedDeviceId
 
+    override fun getPlayer1KeyboardMap(): Map<Int, Int>? {
+        val pad = pads[0] ?: return null
+        if (pad.selectedDeviceId < 0) return null
+        val mask = InputDevice.SOURCE_KEYBOARD or InputDevice.SOURCE_GAMEPAD or InputDevice.SOURCE_JOYSTICK
+        if ((pad.deviceType and mask) != InputDevice.SOURCE_KEYBOARD) return null
+
+        // keymap is key code -> Saturn button; invert it. Unbound buttons use
+        // 65535 and axes set the sign bit, so keep real key codes only.
+        val result = HashMap<Int, Int>()
+        for ((code, button) in pad.keymap) {
+            if (code <= 0 || code > KeyEvent.getMaxKeyCode()) continue
+            val target =
+                when (button) {
+                    // Digital triggers on a keyboard are bound through the analog slots.
+                    PadEvent.PERANALOG_AXIS_LTRIGGER -> PadEvent.BUTTON_LEFT_TRIGGER
+                    PadEvent.PERANALOG_AXIS_RTRIGGER -> PadEvent.BUTTON_RIGHT_TRIGGER
+                    else -> button
+                }
+            if (target < PadEvent.BUTTON_LAST && !result.containsKey(target)) {
+                result[target] = code
+            } else if (target < PadEvent.BUTTON_LAST && button == target) {
+                // A direct button binding wins over the analog-slot fallback.
+                result[target] = code
+            }
+        }
+        return result
+    }
+
     override fun setPlayer2InputDevice(id: String?) {
         if (id == null) {
             pads[1] = BasicInputDevice(this)

@@ -53,6 +53,8 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 #include "vdp2.h"
 #include "yabause.h"
 #include "ygl.h"
+#include "crt/crt_gl.h"
+#include "vdp1texrow.h"
 #include "yui.h"
 #include "frameprofile.h"
 
@@ -4105,6 +4107,8 @@ static void Vdp2DrawRotation_in(RBGDrawInfo * rbg) {
         continue; // may be faster than GPU
       }
 */
+      // RPMD=2: line colour code always comes from parameter A
+      vdp2rotationparameter_struct * lineparam = NULL;
       switch (fixVdp2Regs->RPMD | rgb_type ) {
       case 0:
         parameter = &paraA;
@@ -4127,6 +4131,7 @@ static void Vdp2DrawRotation_in(RBGDrawInfo * rbg) {
         }
         break;
       case 2:
+        lineparam = &paraA;
         if (!(paraA.coefenab)) {
           parameter = &paraA;
         } else {
@@ -4144,7 +4149,6 @@ static void Vdp2DrawRotation_in(RBGDrawInfo * rbg) {
           else {
             parameter = &paraA;
             if (vdp2rGetKValue(parameter, i) == 0) {
-              paraB.lineaddr = paraA.lineaddr;
               parameter = &paraB;
 			}
 			else {
@@ -4388,8 +4392,9 @@ static void Vdp2DrawRotation_in(RBGDrawInfo * rbg) {
           && info->colornumber < 3) {
         if ((color & 0xFF000000) != 0 ) {
           color |= 0x8000;
-          if (parameter->linecoefenab && parameter->lineaddr != 0xFFFFFFFF && parameter->lineaddr != 0x000000 ) {
-            color |= ((parameter->lineaddr & 0x7F) | 0x80) << 16;
+          vdp2rotationparameter_struct * lp = lineparam ? lineparam : parameter;
+          if (lp->linecoefenab && lp->lineaddr != 0xFFFFFFFF && lp->lineaddr != 0x000000 ) {
+            color |= ((lp->lineaddr & 0x7F) | 0x80) << 16;
           }
         }
       }
@@ -4417,6 +4422,7 @@ void SetSaturnResolution(int width, int height)
       GlHeight = _Ygl->screen_height;
       _Ygl->originx = 0;
       _Ygl->originy = 0;
+      _Ygl->output_top = 0;
 
       if (_Ygl->aspect_rate_mode != FULL) {
 
@@ -4442,6 +4448,7 @@ void SetSaturnResolution(int width, int height)
             if (  (GlHeight * hrate) > GlWidth) {
               _Ygl->originy = _Ygl->user_originy + (GlHeight - GlWidth  * wrate);
               GlHeight = _Ygl->screen_width * wrate;
+              _Ygl->output_top = 1;
             }
             else {
               _Ygl->originx = _Ygl->user_originy + (GlWidth - GlHeight * hrate) / 2.0f;
@@ -4460,6 +4467,7 @@ void SetSaturnResolution(int width, int height)
                 _Ygl->originy = _Ygl->user_originy + (GlHeight - GlWidth  * hrate) / 2.0f;
               }else{
                  _Ygl->originy = _Ygl->user_originy + (GlHeight - GlWidth  * hrate);
+                 _Ygl->output_top = 1;
               }
               GlHeight = GlWidth * hrate;
             }
@@ -4535,6 +4543,7 @@ void VIDOGLResize(int originx, int originy, unsigned int w, unsigned int h, int 
   if (originx == 0 && originy == 0 && w == 0 && h == 0 && on == 0) {
     _Ygl->originx = 0;
     _Ygl->originy = 0;    
+    _Ygl->output_top = 0;
     YglGLInit(8, 8); // Just rebuild texture
     return;
   }
@@ -4702,6 +4711,13 @@ void VIDOGLVdp1NormalSpriteDraw(u8 * ram, Vdp1 * regs, u8* back_framebuffer)
   sprite.vertices[5] = (int)((float)(y + sprite.h) * vdp1hratio);
   sprite.vertices[6] = (int)((float)x * vdp1wratio);
   sprite.vertices[7] = (int)((float)(y + sprite.h) * vdp1hratio);
+
+  {
+    /* Hardware vertices (inclusive); the quad above covers whole cells. */
+    const int raw[8] = { CMDXA, CMDYA, CMDXA + sprite.w - 1, CMDYA,
+                         CMDXA + sprite.w - 1, CMDYA + sprite.h - 1, CMDXA, CMDYA + sprite.h - 1 };
+    vdp1_tess_line_params(raw, 1, &sprite.texrow_dmax, &sprite.texrow_k0, &sprite.texrow_k1);
+  }
 
   tmp = cmd.CMDSRCA;
   tmp <<= 16;
@@ -4911,6 +4927,17 @@ void VIDOGLVdp1ScaledSpriteDraw(u8 * ram, Vdp1 * regs, u8* back_framebuffer)
   sprite.vertices[6] = (int)((float)x * vdp1wratio);
   sprite.vertices[7] = (int)((float)(y + rh) * vdp1hratio);
 
+  {
+    /* Line count from the hardware zoom vertices: the side edges are
+       vertical with the raw (inclusive) height. The quad above covers
+       whole cells. */
+    const int rawH = (((cmd.CMDCTRL & 0xF00) >> 8) == 0x0)
+                         ? (int)(s16)cmd.CMDYC - (int)(s16)cmd.CMDYA
+                         : (int)(s16)cmd.CMDYB;
+    const int raw[8] = { 0, 0, 0, 0, 0, rawH, 0, rawH };
+    vdp1_tess_line_params(raw, 1, &sprite.texrow_dmax, &sprite.texrow_k0, &sprite.texrow_k1);
+  }
+
   tmp = cmd.CMDSRCA;
   tmp <<= 16;
   tmp |= cmd.CMDCOLR;
@@ -5021,7 +5048,10 @@ void VIDOGLVdp1DistortedSpriteDraw(u8 * ram, Vdp1 * regs, u8* back_framebuffer)
   int i;
   float col[4 * 4];
   int isSquare;
+  int rawVerts[8];
+  int expandedQuad;
 
+  sprite.texrow_dmax = -1;
   Vdp1ReadCommand(&cmd, Vdp1Regs->addr, Vdp1Ram);
   if (cmd.CMDSIZE == 0) {
     return; // BAD Command
@@ -5062,6 +5092,13 @@ void VIDOGLVdp1DistortedSpriteDraw(u8 * ram, Vdp1 * regs, u8* back_framebuffer)
   sprite.vertices[5] = (s16)cmd.CMDYC;
   sprite.vertices[6] = (s16)cmd.CMDXD;
   sprite.vertices[7] = (s16)cmd.CMDYD;
+  /* Hardware vertices for the texture line count; expandedQuad records
+     whether the quad drawn below covers whole cells (see vdp1texrow.h). */
+  rawVerts[0] = (s16)cmd.CMDXA; rawVerts[1] = (s16)cmd.CMDYA;
+  rawVerts[2] = (s16)cmd.CMDXB; rawVerts[3] = (s16)cmd.CMDYB;
+  rawVerts[4] = (s16)cmd.CMDXC; rawVerts[5] = (s16)cmd.CMDYC;
+  rawVerts[6] = (s16)cmd.CMDXD; rawVerts[7] = (s16)cmd.CMDYD;
+  expandedQuad = 0;
 #if 0
   isSquare = 0;
 #else
@@ -5071,6 +5108,23 @@ void VIDOGLVdp1DistortedSpriteDraw(u8 * ram, Vdp1 * regs, u8* back_framebuffer)
     sprite.vertices[5] == sprite.vertices[7]) {
     sprite.vertices[5] += 1;
     sprite.vertices[7] += 1;
+    expandedQuad = 1;
+  }
+  else if (_Ygl->polygonmode == GPU_TESSERATION &&
+           rawVerts[0] == rawVerts[6] && rawVerts[1] == rawVerts[7] &&
+           rawVerts[2] == rawVerts[4] && rawVerts[3] == rawVerts[5]) {
+    /* One-line sprite (A == D, B == C): the hardware draws the single line
+       A->B. The quad has no area and would draw nothing, so give it one cell
+       of thickness across the line's minor axis. */
+    if (abs(rawVerts[2] - rawVerts[0]) >= abs(rawVerts[3] - rawVerts[1])) {
+      sprite.vertices[5] += 1;
+      sprite.vertices[7] += 1;
+    }
+    else {
+      sprite.vertices[4] += 1;
+      sprite.vertices[6] += 1;
+    }
+    expandedQuad = 1;
   }
   else {
 
@@ -5104,6 +5158,7 @@ void VIDOGLVdp1DistortedSpriteDraw(u8 * ram, Vdp1 * regs, u8* back_framebuffer)
       int lt_index;
 
       sprite.dst = 0;
+      expandedQuad = 1;
 
       // find upper left opsition
       minx = 65535.0f;
@@ -5161,6 +5216,8 @@ void VIDOGLVdp1DistortedSpriteDraw(u8 * ram, Vdp1 * regs, u8* back_framebuffer)
   }
 #endif
 #endif
+  vdp1_tess_line_params(rawVerts, expandedQuad, &sprite.texrow_dmax, &sprite.texrow_k0,
+                        &sprite.texrow_k1);
 
 
   sprite.vertices[0] = (sprite.vertices[0] + Vdp1Regs->localX) * vdp1wratio;
@@ -5275,6 +5332,7 @@ void VIDOGLVdp1PolygonDraw(u8 * ram, Vdp1 * regs, u8* back_framebuffer)
   vdp1cmd_struct cmd;
 
   sprite.linescreen = 0;
+  sprite.texrow_dmax = -1; /* no texture row stepping for polygons */
 
   Vdp1ReadCommand(&cmd, Vdp1Regs->addr, Vdp1Ram);
 
@@ -5715,6 +5773,7 @@ void VIDOGLVdp1PolylineDraw(u8 * ram, Vdp1 * regs, u8* back_framebuffer)
   int colorcalc = 0;
 
   polygon.blendmode = VDP1_COLOR_CL_REPLACE;
+  polygon.texrow_dmax = -1; /* no texture row stepping for lines */
   polygon.linescreen = 0;
   polygon.dst = 0;
   v[0] = Vdp1Regs->localX + (T1ReadWord(Vdp1Ram, Vdp1Regs->addr + 0x0C));
@@ -5985,6 +6044,7 @@ void VIDOGLVdp1LineDraw(u8 * ram, Vdp1 * regs, u8* back_framebuffer)
 
 
   polygon.blendmode = VDP1_COLOR_CL_REPLACE;
+  polygon.texrow_dmax = -1; /* no texture row stepping for lines */
   polygon.linescreen = 0;
   polygon.dst = 0;
   v[0] = Vdp1Regs->localX + (T1ReadWord(Vdp1Ram, Vdp1Regs->addr + 0x0C));
@@ -8416,8 +8476,26 @@ vdp2rotationparameter_struct * FASTCALL vdp2RGetParamMode03WithK(vdp2draw_struct
   return info->GetKValueB(&paraB, h);
 }
 
+// The CRT filters draw the Saturn picture at its own resolution and let the
+// CRT shader scale it to the window (crt/crt_gl.c), so while one is selected
+// the frame is rendered as with the "Original" internal and RBG resolutions.
+// Only the effective values change; the user's choices are kept in
+// user_resolution_mode / user_rbg_resolution_mode and come back as soon as
+// the filter is switched to a non-CRT mode, or when the CRT shader turns out
+// not to build (YglCrtUnavailable; ygles.c calls this again then).
+void VIDOGLApplyEffectiveResolution(void) {
+  const int crt = YGL_IS_CRT_MODE(_Ygl->aamode) && !YglCrtUnavailable(_Ygl->aamode);
+  const RESOLUTION_MODE res = crt ? RES_ORIGINAL : _Ygl->user_resolution_mode;
+  _Ygl->rbg_resolution_mode = crt ? RBG_RES_ORIGINAL : _Ygl->user_rbg_resolution_mode;
+  if (_Ygl->resolution_mode != res) {
+    _Ygl->resolution_mode = res;
+    YglRebuildGramebuffer();
+  }
+}
+
 void VIDOGLSetFilterMode(int type) {
   _Ygl->aamode = type;
+  VIDOGLApplyEffectiveResolution();
   return;
 }
 
@@ -8427,15 +8505,15 @@ void VIDOGLSetSettingValueMode(int type, int value) {
   switch (type) {
   case VDP_SETTING_FILTERMODE:
     _Ygl->aamode = value;
+    VIDOGLApplyEffectiveResolution();
     break;
   case VDP_SETTING_RESOLUTION_MODE:
-    if(_Ygl->resolution_mode != value){
-      _Ygl->resolution_mode = value;
-      YglRebuildGramebuffer();
-    }
+    _Ygl->user_resolution_mode = value;
+    VIDOGLApplyEffectiveResolution();
     break;
   case VDP_SETTING_RBG_RESOLUTION_MODE:
-    _Ygl->rbg_resolution_mode = value;
+    _Ygl->user_rbg_resolution_mode = value;
+    VIDOGLApplyEffectiveResolution();
     break;
   
   case VDP_SETTING_RBG_USE_COMPUTESHADER:

@@ -1085,6 +1085,50 @@ int Ygl_cleanupVdp1Normal(void * p )
 /*------------------------------------------------------------------------------------
 *  VDP1 GlowShading Operation with tessellation
 * ----------------------------------------------------------------------------------*/
+/* Texture address helper for the VDP1 sprite fragment shaders. Outside the
+   GPU tessellation programs it is the usual projective s/q, t/q. The
+   tessellation programs prepend Yglprg_vdp1_tess_row_define: the vertex data
+   of a textured sprite (YglQuadGrowShading_tesselation_in) then carries the
+   atlas row of texture row 0 in t, the line parameter in r and packed
+   constants in q (vdp1texrow.h vdp1_tess_pack); the geometry shader forwards
+   t and q unchanged as v_texrow, and the row is the hardware's: line
+   k = roundEven(r) of dmax + 1 lines takes row vdp1TexRow(k, dmax + 1, ...).
+   vdp1TexRow must match vdp1texrow.h::vdp1_tex_row and the Vulkan copies. */
+const GLchar Yglprg_vdp1_tess_row_define[] =
+"#define VDP1_TESS_ROW 1\n";
+
+const GLchar Yglprg_vdp1_sprite_addr_f[] =
+"#ifdef VDP1_TESS_ROW\n"
+"flat in vec2 v_texrow;\n"
+"int vdp1TexRow(int k, int n, int t0, int t1) {\n"
+"    int dt = t1 - t0;\n"
+"    int adt = abs(dt);\n"
+"    int rev = dt < 0 ? 1 : 0;\n"
+"    int inc; int adj; int e;\n"
+"    if (n <= adt) { inc = 2 * (adt + 1); adj = 2 * n;       e = adt + 1 - (2 * n + rev); }\n"
+"    else          { inc = 2 * adt;       adj = 2 * (n - 1); e = n - (2 * n - rev); }\n"
+"    e += k * inc;\n"
+"    int m = (e >= 0 && adj != 0) ? e / adj + 1 : 0;\n"
+"    return rev != 0 ? t0 - m : t0 + m;\n"
+"}\n"
+"#endif\n"
+"vec2 vdp1SpriteAddr(vec4 tc, ivec2 texSize) {\n"
+"#ifdef VDP1_TESS_ROW\n"
+"  if (v_texrow.y < 0.0) {\n"
+"    int p = int(-v_texrow.y + 0.5) - 1;\n"
+"    int dmax = p & 0xFFF;\n"
+"    int adt = (p >> 12) & 0xFF;\n"
+"    int t0 = int(v_texrow.x + 0.5);\n"
+"    int t1 = t0 + adt;\n"
+"    if (((p >> 20) & 1) != 0) { t1 = t0; t0 = t0 + adt; }\n"
+"    int k = clamp(int(roundEven(tc.z)), 0, dmax);\n"
+"    int row = vdp1TexRow(k, dmax + 1, t0, t1);\n"
+"    return vec2(tc.s, (float(row) + 0.5) / float(texSize.y));\n"
+"  }\n"
+"#endif\n"
+"  return vec2(tc.s / tc.q, tc.t / tc.q);\n"
+"}\n";
+
 const GLchar Yglprg_vdp1_gouraudshading_tess_v_body[] =
 "layout (location = 0) in vec3 a_position; \n"
 "layout (location = 1) in vec4 a_texcoord; \n"
@@ -1093,9 +1137,11 @@ const GLchar Yglprg_vdp1_gouraudshading_tess_v_body[] =
 "out vec3 v_position;  \n"
 "out vec4 v_texcoord; \n"
 "out vec4 v_vtxcolor; \n"
+"out vec2 v_texrowv; \n"
 "void main() {                \n"
 "   v_position  = a_position; \n"
 "   v_vtxcolor  = a_grcolor;  \n"
+"   v_texrowv   = a_texcoord.yw; \n"
 "   v_texcoord  = a_texcoord; \n"
 "   v_texcoord.x  = v_texcoord.x / u_texsize.x; \n"
 "   v_texcoord.y  = v_texcoord.y / u_texsize.y; \n"
@@ -1107,9 +1153,11 @@ const GLchar Yglprg_tess_c_body[] =
 "in vec3 v_position[];  \n"
 "in vec4 v_texcoord[]; \n"
 "in vec4 v_vtxcolor[]; \n"
+"in vec2 v_texrowv[]; \n"
 "out vec3 tcPosition[]; \n"
 "out vec4 tcTexCoord[]; \n"
 "out vec4 tcColor[]; \n"
+"out vec2 tcTexRow[]; \n"
 "uniform float TessLevelInner; \n"
 "uniform float TessLevelOuter; \n"
 " \n"
@@ -1120,6 +1168,7 @@ const GLchar Yglprg_tess_c_body[] =
 "	tcPosition[ID] = v_position[ID];  \n"
 "	tcTexCoord[ID] = v_texcoord[ID];  \n"
 "	tcColor[ID] = v_vtxcolor[ID];  \n"
+"	tcTexRow[ID] = v_texrowv[ID];  \n"
 " \n"
 "	if (ID == 0) {  \n"
 "		gl_TessLevelInner[0] = TessLevelInner;  \n"
@@ -1137,8 +1186,10 @@ const GLchar Yglprg_tess_e_body[] =
 "in vec3 tcPosition[]; \n"
 "in vec4 tcTexCoord[]; \n"
 "in vec4 tcColor[]; \n"
+"in vec2 tcTexRow[]; \n"
 "out vec4 teTexCoord; \n"
 "out vec4 teColor; \n"
+"out vec2 teTexRow; \n"
 "uniform mat4 u_mvpMatrix; \n"
 " \n"
 "void main() \n"
@@ -1155,6 +1206,7 @@ const GLchar Yglprg_tess_e_body[] =
 "	vec4 ca = mix(tcColor[0], tcColor[3], u); \n"
 "	vec4 cb = mix(tcColor[1], tcColor[2], u); \n"
 "	teColor = mix(ca, cb, v); \n"
+"	teTexRow = tcTexRow[0]; /* per-sprite constants: copied, never interpolated */ \n"
 "} \n";
 const GLchar * pYglprg_vdp1_gouraudshading_tess_e[] = { NULL, Yglprg_tess_e_body, NULL };
 
@@ -1165,21 +1217,26 @@ const GLchar Yglprg_tess_g_body[] =
 "layout(triangle_strip, max_vertices = 3) out; \n"
 "in vec4 teTexCoord[3]; \n"
 "in vec4 teColor[3]; \n"
+"in vec2 teTexRow[3]; \n"
 "out vec4 v_texcoord; \n"
 "out vec4 v_vtxcolor; \n"
+"flat out vec2 v_texrow; \n"
 " \n"
 "void main() \n"
 "{ \n"
 "	v_texcoord = teTexCoord[0]; \n"
 "	v_vtxcolor = teColor[0]; \n"
+"	v_texrow = teTexRow[0]; \n"
 "	gl_Position = gl_in[0].gl_Position; EmitVertex(); \n"
 " \n"
 "	v_texcoord = teTexCoord[1]; \n"
 "	v_vtxcolor = teColor[1]; \n"
+"	v_texrow = teTexRow[1]; \n"
 "	gl_Position = gl_in[1].gl_Position; EmitVertex(); \n"
 " \n"
 "	v_texcoord = teTexCoord[2]; \n"
 "	v_vtxcolor = teColor[2]; \n"
+"	v_texrow = teTexRow[2]; \n"
 "	gl_Position = gl_in[2].gl_Position; EmitVertex(); \n"
 " \n"
 "	EndPrimitive(); \n"
@@ -1215,16 +1272,16 @@ const GLchar Yglprg_vdp1_gouraudshading_f[] =
 "in vec4 v_vtxcolor;                                                 \n"
 "out vec4 fragColor;            \n"
 "void main() {                                                            \n"
-"  vec2 addr = v_texcoord.st;                                             \n"
-"  addr.s = addr.s / (v_texcoord.q);                                      \n"
-"  addr.t = addr.t / (v_texcoord.q);                                      \n"
+"  vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));\n"
 "  vec4 spriteColor = texture(u_sprite,addr);                           \n"
 "  if( spriteColor.a == 0.0 ) discard;                                      \n"
 "  fragColor   = spriteColor;                                          \n"
 "  fragColor  = clamp(spriteColor+v_vtxcolor,vec4(0.0),vec4(1.0));     \n"
 "  fragColor.a = spriteColor.a;                                        \n"
 "}\n";
-const GLchar * pYglprg_vdp1_gouraudshading_f[] = {NULL,Yglprg_vdp1_gouraudshading_f, NULL};
+const GLchar * pYglprg_vdp1_gouraudshading_f[] = { NULL, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_gouraudshading_f, NULL };
+/* GPU tessellation variant: texture row stepping on (fcount 3). */
+const GLchar * pYglprg_vdp1_gouraudshading_tess_f[] = { NULL, Yglprg_vdp1_tess_row_define, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_gouraudshading_f, NULL };
 
 const GLchar Yglprg_vdp1_gouraudshading_spd_f[] =
 "uniform sampler2D u_sprite;                                              \n"
@@ -1232,14 +1289,14 @@ const GLchar Yglprg_vdp1_gouraudshading_spd_f[] =
 "in vec4 v_vtxcolor;                                                 \n"
 "out vec4 fragColor;            \n"
 "void main() {                                                            \n"
-"  vec2 addr = v_texcoord.st;                                             \n"
-"  addr.s = addr.s / (v_texcoord.q);                                      \n"
-"  addr.t = addr.t / (v_texcoord.q);                                      \n"
+"  vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));\n"
 "  vec4 spriteColor = texture(u_sprite,addr);                           \n"
 "  fragColor  = clamp(spriteColor+v_vtxcolor,vec4(0.0),vec4(1.0));     \n"
 "  fragColor.a = spriteColor.a;                                        \n"
 "}\n";
-const GLchar * pYglprg_vdp1_gouraudshading_spd_f[] = { NULL,Yglprg_vdp1_gouraudshading_spd_f, NULL };
+const GLchar * pYglprg_vdp1_gouraudshading_spd_f[] = { NULL, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_gouraudshading_spd_f, NULL };
+/* GPU tessellation variant: texture row stepping on (fcount 3). */
+const GLchar * pYglprg_vdp1_gouraudshading_spd_tess_f[] = { NULL, Yglprg_vdp1_tess_row_define, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_gouraudshading_spd_f, NULL };
 
 static YglVdp1CommonParam id_g = { 0 };
 static YglVdp1CommonParam id_spd_g = { 0 };
@@ -1274,10 +1331,8 @@ const GLchar Yglprg_vdp1_gouraudshading_hf_f[] =
       "in vec4 v_vtxcolor;                                                                     \n"
       "out vec4 fragColor; \n "
       "void main() {                                                                                \n"
-      "  vec2 addr = v_texcoord.st;                                                                 \n"
+      "  vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));\n"
       "  vec2 faddr = vec2( gl_FragCoord.x/float(u_fbowidth), gl_FragCoord.y/float(u_fbohegiht));   \n"
-      "  addr.s = addr.s / (v_texcoord.q);                                                          \n"
-      "  addr.t = addr.t / (v_texcoord.q);                                                          \n"
       "  vec4 spriteColor = texture(u_sprite,addr);                                               \n"
       "  if( spriteColor.a == 0.0 ) discard;                                                          \n"
       "  vec4 fboColor    = texture(u_fbo,faddr);                                                 \n"
@@ -1291,7 +1346,9 @@ const GLchar Yglprg_vdp1_gouraudshading_hf_f[] =
       "    fragColor = spriteColor;                                                              \n"
       "  }                                                                                          \n"
       "}\n";
-const GLchar * pYglprg_vdp1_gouraudshading_hf_f[] = {NULL,Yglprg_vdp1_gouraudshading_hf_f, NULL};
+const GLchar * pYglprg_vdp1_gouraudshading_hf_f[] = { NULL, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_gouraudshading_hf_f, NULL };
+/* GPU tessellation variant: texture row stepping on (fcount 3). */
+const GLchar * pYglprg_vdp1_gouraudshading_hf_tess_f[] = { NULL, Yglprg_vdp1_tess_row_define, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_gouraudshading_hf_f, NULL };
 
 
 static YglVdp1CommonParam id_ght = { 0 };
@@ -1328,10 +1385,8 @@ const GLchar Yglprg_vdp1_halftrans_f[] =
       "in vec4 v_texcoord;                                                                     \n"
       "out vec4 fragColor; \n "
       "void main() {                                                                                \n"
-      "  vec2 addr = v_texcoord.st;                                                                 \n"
+      "  vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));\n"
       "  vec2 faddr = vec2( gl_FragCoord.x/float(u_fbowidth), gl_FragCoord.y/float(u_fbohegiht));   \n"
-      "  addr.s = addr.s / (v_texcoord.q);                                                          \n"
-      "  addr.t = addr.t / (v_texcoord.q);                                                          \n"
       "  vec4 spriteColor = texture(u_sprite,addr);                                               \n"
       "  if( spriteColor.a == 0.0 ) discard;                                                          \n"
       "  vec4 fboColor    = texture(u_fbo,faddr);                                                 \n"
@@ -1344,7 +1399,9 @@ const GLchar Yglprg_vdp1_halftrans_f[] =
       "    fragColor = spriteColor;                                                              \n"
       "  }                                                                                          \n"
       "}\n";
-const GLchar * pYglprg_vdp1_halftrans_f[] = {NULL,Yglprg_vdp1_halftrans_f, NULL};
+const GLchar * pYglprg_vdp1_halftrans_f[] = { NULL, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_halftrans_f, NULL };
+/* GPU tessellation variant: texture row stepping on (fcount 3). */
+const GLchar * pYglprg_vdp1_halftrans_tess_f[] = { NULL, Yglprg_vdp1_tess_row_define, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_halftrans_f, NULL };
 
 static YglVdp1CommonParam hf = {0};
 static YglVdp1CommonParam hf_tess = {0};
@@ -1379,9 +1436,7 @@ const GLchar Yglprg_vdp1_mesh_f[] =
 "in vec4 v_vtxcolor;                                                                     \n"
 "out highp vec4 fragColor; \n "
 "void main() {                                                                                \n"
-"  vec2 addr = v_texcoord.st;                                                                 \n"
-"  addr.s = addr.s / (v_texcoord.q);                                                          \n"
-"  addr.t = addr.t / (v_texcoord.q);                                                          \n"
+"  vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));\n"
 "  vec4 spriteColor = texture(u_sprite,addr);                                               \n"
 "  if( spriteColor.a == 0.0 ) discard;      \n"
 "  if( (int(gl_FragCoord.y) & 0x01) == 0 ){ \n"
@@ -1433,7 +1488,9 @@ const GLchar Yglprg_vdp1_mesh_f[] =
 "  }                                                                                          \n"
 "}\n";
 #endif
-const GLchar * pYglprg_vdp1_mesh_f[] = { NULL,Yglprg_vdp1_mesh_f, NULL };
+const GLchar * pYglprg_vdp1_mesh_f[] = { NULL, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_mesh_f, NULL };
+/* GPU tessellation variant: texture row stepping on (fcount 3). */
+const GLchar * pYglprg_vdp1_mesh_tess_f[] = { NULL, Yglprg_vdp1_tess_row_define, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_mesh_f, NULL };
 
 static YglVdp1CommonParam mesh = { 0 };
 static YglVdp1CommonParam grow_tess = { 0 };
@@ -1508,10 +1565,8 @@ const GLchar Yglprg_vdp1_shadow_f[] =
 "in vec4 v_texcoord;\n"
 "out vec4 fragColor; \n "
 "void main() { \n"
-"  vec2 addr = v_texcoord.st;\n"
+"  vec2 addr = vdp1SpriteAddr(v_texcoord, textureSize(u_sprite, 0));\n"
 "  vec2 faddr = vec2( gl_FragCoord.x/float(u_fbowidth), gl_FragCoord.y/float(u_fbohegiht));\n"
-"  addr.s = addr.s / (v_texcoord.q);\n"
-"  addr.t = addr.t / (v_texcoord.q);\n"
 "  vec4 spriteColor = texture(u_sprite,addr);\n"
 "  if( spriteColor.a == 0.0 ){ discard; }\n"
 "  vec4 fboColor = texture(u_fbo,faddr);\n"
@@ -1522,7 +1577,9 @@ const GLchar Yglprg_vdp1_shadow_f[] =
 "    discard;\n"
 "  }\n"
 "}\n";
-const GLchar * pYglprg_vdp1_shadow_f[] = { NULL,Yglprg_vdp1_shadow_f, NULL };
+const GLchar * pYglprg_vdp1_shadow_f[] = { NULL, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_shadow_f, NULL };
+/* GPU tessellation variant: texture row stepping on (fcount 3). */
+const GLchar * pYglprg_vdp1_shadow_tess_f[] = { NULL, Yglprg_vdp1_tess_row_define, Yglprg_vdp1_sprite_addr_f, Yglprg_vdp1_shadow_f, NULL };
 
 static YglVdp1CommonParam shadow = { 0 };
 static YglVdp1CommonParam shadow_tess = { 0 };
@@ -3141,12 +3198,12 @@ int YglProgramInit()
    //-----------------------------------------------------------------------------------------------------------
    YGLLOG("PG_VFP1_GOURAUDSAHDING\n");
 
-   if (YglInitShader(PG_VFP1_GOURAUDSAHDING, pYglprg_vdp1_gouraudshading_v, pYglprg_vdp1_gouraudshading_f, 1,NULL, NULL, NULL) != 0)
+   if (YglInitShader(PG_VFP1_GOURAUDSAHDING, pYglprg_vdp1_gouraudshading_v, pYglprg_vdp1_gouraudshading_f, 2,NULL, NULL, NULL) != 0)
       return -1;
 
    Ygl_Vdp1CommonGetUniformId(_prgid[PG_VFP1_GOURAUDSAHDING], &id_g);
 
-   if (YglInitShader(PG_VFP1_GOURAUDSAHDING_SPD, pYglprg_vdp1_gouraudshading_v, pYglprg_vdp1_gouraudshading_spd_f, 1, NULL, NULL, NULL) != 0)
+   if (YglInitShader(PG_VFP1_GOURAUDSAHDING_SPD, pYglprg_vdp1_gouraudshading_v, pYglprg_vdp1_gouraudshading_spd_f, 2, NULL, NULL, NULL) != 0)
      return -1;
 
    Ygl_Vdp1CommonGetUniformId(_prgid[PG_VFP1_GOURAUDSAHDING_SPD], &id_spd_g);
@@ -3162,7 +3219,7 @@ int YglProgramInit()
    YGLLOG("PG_VFP1_HALFTRANS\n");
 
    //
-   if (YglInitShader(PG_VFP1_HALFTRANS, pYglprg_vdp1_halftrans_v, pYglprg_vdp1_halftrans_f, 1, NULL, NULL, NULL) != 0)
+   if (YglInitShader(PG_VFP1_HALFTRANS, pYglprg_vdp1_halftrans_v, pYglprg_vdp1_halftrans_f, 2, NULL, NULL, NULL) != 0)
       return -1;
 
    Ygl_Vdp1CommonGetUniformId(_prgid[PG_VFP1_HALFTRANS], &hf);
@@ -3172,7 +3229,7 @@ int YglProgramInit()
    YGLLOG("PG_VFP1_SHADOW\n");
 
    //
-   if (YglInitShader(PG_VFP1_SHADOW, pYglprg_vdp1_shadow_v, pYglprg_vdp1_shadow_f, 1, NULL, NULL, NULL) != 0)
+   if (YglInitShader(PG_VFP1_SHADOW, pYglprg_vdp1_shadow_v, pYglprg_vdp1_shadow_f, 2, NULL, NULL, NULL) != 0)
      return -1;
 
    shadow.sprite = glGetUniformLocation(_prgid[PG_VFP1_SHADOW], (const GLchar *)"u_sprite");
@@ -3184,7 +3241,7 @@ int YglProgramInit()
    //-----------------------------------------------------------------------------------------------------------
    YGLLOG("PG_VFP1_GOURAUDSAHDING_HALFTRANS\n");
 
-   if (YglInitShader(PG_VFP1_GOURAUDSAHDING_HALFTRANS, pYglprg_vdp1_gouraudshading_hf_v, pYglprg_vdp1_gouraudshading_hf_f, 1, NULL, NULL, NULL) != 0)
+   if (YglInitShader(PG_VFP1_GOURAUDSAHDING_HALFTRANS, pYglprg_vdp1_gouraudshading_hf_v, pYglprg_vdp1_gouraudshading_hf_f, 2, NULL, NULL, NULL) != 0)
       return -1;
 
    Ygl_Vdp1CommonGetUniformId(_prgid[PG_VFP1_GOURAUDSAHDING_HALFTRANS], &id_ght);
@@ -3200,7 +3257,7 @@ int YglProgramInit()
    //-----------------------------------------------------------------------------------------------------------
    YGLLOG("PG_VFP1_MESH\n");
 
-   if (YglInitShader(PG_VFP1_MESH, pYglprg_vdp1_mesh_v, pYglprg_vdp1_mesh_f, 1, NULL, NULL, NULL) != 0)
+   if (YglInitShader(PG_VFP1_MESH, pYglprg_vdp1_mesh_v, pYglprg_vdp1_mesh_f, 2, NULL, NULL, NULL) != 0)
      return -1;
 
    Ygl_Vdp1CommonGetUniformId(_prgid[PG_VFP1_MESH], &mesh);
@@ -3296,8 +3353,8 @@ int YglTesserationProgramInit()
     YGLLOG("PG_VFP1_GOURAUDSAHDING_TESS");
     if (YglInitShader(PG_VFP1_GOURAUDSAHDING_TESS,
         pYglprg_vdp1_gouraudshading_tess_v,
-        pYglprg_vdp1_gouraudshading_f,
-        1,
+        pYglprg_vdp1_gouraudshading_tess_f,
+        3,
         pYglprg_vdp1_gouraudshading_tess_c,
         pYglprg_vdp1_gouraudshading_tess_e,
         pYglprg_vdp1_gouraudshading_tess_g) != 0)
@@ -3309,8 +3366,8 @@ int YglTesserationProgramInit()
     YGLLOG("PG_VFP1_GOURAUDSAHDING_SPD_TESS");
     if (YglInitShader(PG_VFP1_GOURAUDSAHDING_SPD_TESS,
       pYglprg_vdp1_gouraudshading_tess_v,
-      pYglprg_vdp1_gouraudshading_spd_f,
-      1,
+      pYglprg_vdp1_gouraudshading_spd_tess_f,
+      3,
       pYglprg_vdp1_gouraudshading_tess_c,
       pYglprg_vdp1_gouraudshading_tess_e,
       pYglprg_vdp1_gouraudshading_tess_g) != 0)
@@ -3322,8 +3379,8 @@ int YglTesserationProgramInit()
     YGLLOG("PG_VFP1_MESH_TESS");
     if (YglInitShader(PG_VFP1_MESH_TESS,
       pYglprg_vdp1_gouraudshading_tess_v,
-      pYglprg_vdp1_mesh_f,
-      1,
+      pYglprg_vdp1_mesh_tess_f,
+      3,
       pYglprg_vdp1_gouraudshading_tess_c,
       pYglprg_vdp1_gouraudshading_tess_e,
       pYglprg_vdp1_gouraudshading_tess_g) != 0)
@@ -3336,8 +3393,8 @@ int YglTesserationProgramInit()
     YGLLOG("PG_VFP1_GOURAUDSAHDING_HALFTRANS_TESS");
     if (YglInitShader(PG_VFP1_GOURAUDSAHDING_HALFTRANS_TESS,
       pYglprg_vdp1_gouraudshading_tess_v,
-      pYglprg_vdp1_gouraudshading_hf_f,
-      1,
+      pYglprg_vdp1_gouraudshading_hf_tess_f,
+      3,
       pYglprg_vdp1_gouraudshading_tess_c,
       pYglprg_vdp1_gouraudshading_tess_e,
       pYglprg_vdp1_gouraudshading_tess_g) != 0)
@@ -3349,8 +3406,8 @@ int YglTesserationProgramInit()
     YGLLOG("PG_VFP1_SHADOW_TESS");
     if (YglInitShader(PG_VFP1_SHADOW_TESS,
       pYglprg_vdp1_gouraudshading_tess_v,
-      pYglprg_vdp1_shadow_f,
-      1,
+      pYglprg_vdp1_shadow_tess_f,
+      3,
       pYglprg_vdp1_gouraudshading_tess_c,
       pYglprg_vdp1_gouraudshading_tess_e,
       pYglprg_vdp1_gouraudshading_tess_g) != 0)
@@ -3368,8 +3425,8 @@ int YglTesserationProgramInit()
     YGLLOG("PG_VFP1_HALFTRANS_TESS");
     if (YglInitShader(PG_VFP1_HALFTRANS_TESS,
       pYglprg_vdp1_gouraudshading_tess_v,
-      pYglprg_vdp1_halftrans_f,
-      1,
+      pYglprg_vdp1_halftrans_tess_f,
+      3,
       pYglprg_vdp1_gouraudshading_tess_c,
       pYglprg_vdp1_gouraudshading_tess_e,
       pYglprg_vdp1_gouraudshading_tess_g) != 0)

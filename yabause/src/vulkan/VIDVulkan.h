@@ -38,6 +38,7 @@ extern "C" {
 #include <array>
 #include <functional>
 #include <map>
+#include <atomic>
 
 class TextureManager;
 class VertexManager;
@@ -52,6 +53,7 @@ class Vdp1ComputeRasterizer;
 class Vdp2GBuffer;    // issue #22 T-003: per-layer G-buffer
 class Vdp2Compositor; // issue #22 T-008: per-pixel composite pass
 class Vdp2SpriteDecoder; // issue #22 T-009: VDP1 sprite -> kSprite slice
+class CrtPresenter;      // CRT mode: the RetroArch CRT shaders as the output pass
 
 #define ATLAS_BIAS (0.025f)
 
@@ -332,6 +334,10 @@ public:
   int vdp2height; // virtual VDP2 resolution Y
   int originx; // rendering start point x
   int originy; // rendering start point y 
+  // true when SetSaturnResolution put the output at the top of the window
+  // (full screen, picture limited by the window's width); the CRT mode
+  // places its picture the same way
+  bool outputTop = false;
   int renderWidth;  // rendering width(not device width)
   int renderHeight; // rendering height(not device height)
   int finalWidth;  // final rendering width(not device width)
@@ -348,6 +354,12 @@ public:
   // dropped (emulation keeps running) until the next resize() rebuilds the
   // swapchain. Safe to call from any thread, and before a window exists.
   void onSurfaceLost();
+
+  // Developer check of the CRT output for a turned (pre-transformed)
+  // swapchain on a desktop: the CRT pass draws as if the swapchain had
+  // steps (0..3) quarter turns of pre-transform; -1 (default) uses the real
+  // one. Only the vdp-dump mode sets it.
+  void setCrtTestPreTransform(int steps) { crtTestPreSteps = steps; }
 
   // issue #22 debug: per-layer trace of what renderLayersToGBuffer() did for
   // each background layer that owns a G-buffer slice (NBG0-3 / RBG0). Filled
@@ -618,6 +630,26 @@ protected:
   int resolutionMode = RES_NATIVE;
   int rbgResolutionMode = RBG_RES_ORIGINAL;
   int rebuildFrameBuffer = 0;
+
+  // CRT mode (filterMode one of AA_CRT_*): while it is on, the core renders
+  // at the Saturn's own resolution (RES_ORIGINAL / RBG_RES_ORIGINAL) and
+  // upright, and CrtPresenter scales the picture to the window. These are
+  // effective values: the user's settings are kept in userResolutionMode /
+  // userRbgResolutionMode and come back when the CRT mode is switched off.
+  // The other filter values change nothing in this renderer.
+  int filterMode = 0;
+  int userResolutionMode = RES_NATIVE;
+  int userRbgResolutionMode = RBG_RES_ORIGINAL;
+  bool crtActive = false;        // the effective settings are the CRT ones
+  bool crtPresented = false;     // the last frame went out through the CRT shader
+  std::atomic<bool> crtReleasePending{false};   // set by onSurfaceLost (any thread)
+  int crtTestPreSteps = -1;   // see setCrtTestPreTransform
+  CrtPresenter * crtPresenter = nullptr;
+  // rotate_screen as the core renders it: in CRT mode the presenter turns
+  // the picture instead
+  bool coreRotateScreen() const { return rotate_screen && !crtActive; }
+  void applyEffectiveResolution();
+  bool presentCrt(VkCommandBuffer commandBuffer, int ci, VkExtent2D framebufferSize, int pretransformFlag);
 
   void SetSaturnResolution(int width, int height);
 

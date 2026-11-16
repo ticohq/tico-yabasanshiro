@@ -89,6 +89,7 @@ val IN_GAME_PREFS =
         InGamePref.Str("pref_resolution", "0"),
         InGamePref.Str("pref_aspect_rate", "0"),
         InGamePref.Str("pref_rbg_resolution", "0"),
+        InGamePref.Str(VideoFilter.KEY, VideoFilter.NONE),
         InGamePref.Str(Vdp2Composite.KEY, Vdp2Composite.DEFAULT_VALUE),
         InGamePref.Str(VideoCore.KEY, VideoCore.OPENGL),
     )
@@ -274,6 +275,16 @@ class InGamePreference :
             true
         }
 
+        // Installed after setSummaries() for the same reason; the summary of the
+        // filter list follows the choice (applyFilterChoices() sets the first one).
+        findPreference<ListPreference?>(VideoFilter.KEY)?.setOnPreferenceChangeListener { preference, newValue ->
+            if (preference is ListPreference) {
+                val index = preference.findIndexOfValue(newValue.toString())
+                if (index >= 0) preference.summary = preference.entries[index]
+            }
+            true
+        }
+
         this.preferenceScreen.sharedPreferences!!.registerOnSharedPreferenceChangeListener(this)
     }
 
@@ -333,6 +344,8 @@ class InGamePreference :
         val computeShaderPref = findPreference<CheckBoxPreference?>("pref_use_compute_shader")
         val compositePref = findPreference<ListPreference?>(Vdp2Composite.KEY)
 
+        applyFilterChoices(videoValue)
+
         // Only the Vulkan renderer reads VDP_SETTING_VDP2_NEW_COMPOSITE, so the
         // item stays greyed out on the other cores.
         compositePref?.isEnabled =
@@ -380,6 +393,23 @@ class InGamePreference :
                 computeShaderPref?.isChecked = false
             }
         }
+    }
+
+    /**
+     * Offers the filters the video core implements (see [VideoFilter]) and shows
+     * the stored one, or None when this core does not offer it. The stored value
+     * is not rewritten.
+     */
+    private fun applyFilterChoices(videoCore: String?) {
+        val pref = findPreference<ListPreference?>(VideoFilter.KEY) ?: return
+        val labels = resources.getStringArray(R.array.entries_video_filte_list_preference)
+        val values = resources.getStringArray(R.array.entryvalues_video_filte_list_preference).toList()
+        val offered = VideoFilter.offeredValues(videoCore, values)
+        pref.entries = offered.map { labels[values.indexOf(it)] }.toTypedArray()
+        pref.entryValues = offered.toTypedArray()
+        pref.isEnabled = VideoFilter.isSelectable(videoCore)
+        val shown = VideoFilter.displayValue(pref.value, offered)
+        pref.summary = labels[values.indexOf(shown)]
     }
 
     private fun showRestartConfirmationDialog(sharedPreferences: SharedPreferences) {

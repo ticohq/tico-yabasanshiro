@@ -2,6 +2,193 @@
   "version": 1,
   "profiles": [
     {
+      "key": "vk:1010:35010101",
+      "name": "Imagination Technologies PowerVR B-Series BXM-8-256",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:1010:70061042",
+      "name": "Google Inc. (Imagination Technologies) ANGLE (Imagination Technologies, Vulkan 1.4.317 (PowerVR C-Se",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "1",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:10de:1f82",
+      "name": "Qualcomm Adreno (TM) 640",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "1",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:10de:92eb03d7",
+      "name": "NVIDIA Corporation NVIDIA Tegra",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:60a00002",
+      "name": "ARM Mali-G71",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:72110000",
+      "name": "ARM Mali-G76 MC4",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:72120000",
+      "name": "ARM Mali-G52",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:74021000",
+      "name": "ARM Mali-G52",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:90800011",
+      "name": "ARM Mali-G77 MC9",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "1",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:90910010",
+      "name": "ARM Mali-G57",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:90930010",
+      "name": "ARM Mali-G57 MC2",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:92020000",
+      "name": "ARM Mali-G78",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "1",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:92020010",
+      "name": "ARM Mali-G78",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "0",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:92041010",
+      "name": "ARM Mali-G68",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:a8620000",
+      "name": "ARM Mali-G710",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:a8670000",
+      "name": "ARM Mali-G610 MC6",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:b8a20000",
+      "name": "ARM Mali-G715",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "1",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
       "key": "vk:13b5:b8a31030",
       "name": "ARM Mali-G615 MC6",
       "source": "aggregated",
@@ -9,6 +196,171 @@
       "polygonGeneration": "3",
       "useComputeShader": true,
       "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:c8700010",
+      "name": "ARM Mali-G720 MC7",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:d8300010",
+      "name": "ARM Mali-G925-Immortalis MC12",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "1",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:13b5:e8800010",
+      "name": "ARM Mali-G1-Ultra MC12",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:144d:2300100",
+      "name": "Samsung Electronics Co., Ltd. ANGLE ((Samsung Xclipse 540) on Vulkan 1.3.279)",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "0",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:144d:2600200",
+      "name": "Samsung Electronics Co., Ltd. ANGLE ((Samsung Xclipse 940) on Vulkan 1.3.279)",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:43020000",
+      "name": "Qualcomm Adreno (TM) 720",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:43020100",
+      "name": "Qualcomm Adreno (TM) 722",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:43030b00",
+      "name": "Qualcomm Adreno (TM) 732",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:43050a00",
+      "name": "Qualcomm Adreno (TM) 740",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "1",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:43050a01",
+      "name": "Qualcomm Adreno (TM) 740",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "1",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:43051401",
+      "name": "Qualcomm Adreno (TM) 750",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "1",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:44010000",
+      "name": "Qualcomm Adreno (TM) 810",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:44030000",
+      "name": "Qualcomm Adreno (TM) 825",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:44050000",
+      "name": "Qualcomm Adreno (TM) 830",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "1",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:44050001",
+      "name": "Qualcomm Adreno (TM) 830",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "1",
       "rbgResolution": "4",
       "resolution": "0"
     },
@@ -24,6 +376,28 @@
       "resolution": "0"
     },
     {
+      "key": "vk:5143:6010000",
+      "name": "Qualcomm Adreno (TM) 610",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:6010001",
+      "name": "Qualcomm Adreno (TM) 610",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "1",
+      "resolution": "2"
+    },
+    {
       "key": "vk:5143:6010300",
       "name": "Qualcomm Adreno (TM) A12",
       "source": "aggregated",
@@ -35,14 +409,103 @@
       "resolution": "2"
     },
     {
-      "key": "vk:5143:43050a01",
-      "name": "Qualcomm Adreno (TM) 740",
+      "key": "vk:5143:6010501",
+      "name": "Qualcomm Adreno (TM) 615",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "2",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:6010800",
+      "name": "Qualcomm Adreno (TM) 618",
+      "source": "aggregated",
+      "videoCore": "1",
+      "polygonGeneration": "0",
+      "useComputeShader": false,
+      "vdp2Composite": "0",
+      "rbgResolution": "0",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:6010900",
+      "name": "Qualcomm Adreno (TM) 619",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "2"
+    },
+    {
+      "key": "vk:5143:6010901",
+      "name": "Qualcomm Adreno (TM) 619",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "1",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:6020001",
+      "name": "Qualcomm Adreno (TM) 620",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "1",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:6030001",
+      "name": "Qualcomm Adreno (TM) 630",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:6030500",
+      "name": "Qualcomm Adreno (TM) 642L",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:6030501",
+      "name": "Qualcomm Adreno (TM) 643",
       "source": "aggregated",
       "videoCore": "4",
       "polygonGeneration": "3",
       "useComputeShader": true,
-      "vdp2Composite": "1",
-      "rbgResolution": "4"
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "2"
+    },
+    {
+      "key": "vk:5143:6040001",
+      "name": "Qualcomm Adreno (TM) 640",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "1",
+      "resolution": "0"
     },
     {
       "key": "vk:5143:6050002",
@@ -52,7 +515,52 @@
       "polygonGeneration": "2",
       "useComputeShader": true,
       "vdp2Composite": "0",
-      "rbgResolution": "4"
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:6060001",
+      "name": "Qualcomm Adreno (TM) 660",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:7010000",
+      "name": "Qualcomm Adreno (TM) 710",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:7030001",
+      "name": "Qualcomm Adreno (TM) 730",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "2",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
+    },
+    {
+      "key": "vk:5143:7030002",
+      "name": "Qualcomm Adreno (TM) 725",
+      "source": "aggregated",
+      "videoCore": "4",
+      "polygonGeneration": "3",
+      "useComputeShader": true,
+      "vdp2Composite": "0",
+      "rbgResolution": "4",
+      "resolution": "0"
     }
   ]
 }

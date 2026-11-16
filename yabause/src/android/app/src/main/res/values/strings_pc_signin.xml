@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pc_sign_in_title">Sign in</string>
+    <string name="pc_sign_in_google_title">Sign in with Google</string>
+    <string name="pc_sign_in_google_description">On Google Play Games for PC, Google sign-in is done in your browser. Get a code, then enter it on the Google page from your PC or phone.</string>
+    <string name="pc_sign_in_get_code">Get sign-in code</string>
+    <string name="pc_sign_in_step_open">1. Open this page in a browser on your PC or phone</string>
+    <string name="pc_sign_in_open_browser">Open in browser</string>
+    <string name="pc_sign_in_step_enter">2. Enter this code and choose your Google account</string>
+    <string name="pc_sign_in_waiting">Waiting for you to finish in the browser…</string>
+    <string name="pc_sign_in_signing_in">Signing in…</string>
+    <string name="pc_sign_in_denied">Sign-in was cancelled in the browser.</string>
+    <string name="pc_sign_in_expired">The code expired. Get a new code and try again.</string>
+    <string name="pc_sign_in_failed">Sign-in failed: %1$s</string>
+    <string name="pc_sign_in_new_code">Get a new code</string>
+    <string name="pc_sign_in_not_configured">Google sign-in is not available in this build.</string>
+    <string name="pc_sign_in_terms">By signing in, you agree to the Terms of Use (yabasanshiro.com/terms-of-use) and the Privacy Policy (yabasanshiro.com/privacy).</string>
+</resources>

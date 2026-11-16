@@ -325,6 +325,16 @@
        <item row="30" column="1" colspan="2">
         <widget class="QComboBox" name="cbRBGREsolution"/>
        </item>
+       <item row="32" column="0">
+        <widget class="QLabel" name="lFilter">
+         <property name="text">
+          <string>Filter</string>
+         </property>
+        </widget>
+       </item>
+       <item row="32" column="1" colspan="2">
+        <widget class="QComboBox" name="cbFilter"/>
+       </item>
        <item row="3" column="0" colspan="3">
         <widget class="QComboBox" name="cbAspectRatio"/>
        </item>
@@ -419,6 +429,16 @@
            <string>Synchronize to the real time</string>
           </property>
          </item>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="cbSoundHighQuality">
+         <property name="toolTip">
+          <string>Renders the sound with less aliasing and a floating-point effect DSP. Uses more CPU.</string>
+         </property>
+         <property name="text">
+          <string>High quality sound</string>
+         </property>
         </widget>
        </item>
        <item>

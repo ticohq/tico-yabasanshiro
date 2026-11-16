@@ -56,6 +56,14 @@
                     android:layout_width="fill_parent"
                     android:layout_height="fill_parent" />
 
+                <org.uoyabause.android.KeyboardMapOverlayView
+                    android:id="@+id/keyboard_map_overlay"
+                    android:layout_width="@dimen/keyboard_map_overlay_width"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="@dimen/margin_medium"
+                    android:visibility="gone" />
+
                 <FrameLayout
                     android:id="@+id/ext_fragment"
                     android:layout_width="match_parent"

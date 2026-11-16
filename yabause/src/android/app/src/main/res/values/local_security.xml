@@ -43,7 +43,6 @@
 
     <!-- Discord OAuth2 Configuration -->
     <string name="discord_client_id" translatable="false">REPLACE_WITH_YOUR_OWN_VALUE</string>
-    <string name="discord_client_secret" translatable="false">REPLACE_WITH_YOUR_OWN_VALUE</string>
     <string name="discord_redirect_uri" translatable="false">REPLACE_WITH_YOUR_OWN_VALUE</string>
     <string name="discord_auth_url" translatable="false">REPLACE_WITH_YOUR_OWN_VALUE</string>
     <string name="discord_token_url" translatable="false">REPLACE_WITH_YOUR_OWN_VALUE</string>

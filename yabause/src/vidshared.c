@@ -47,6 +47,7 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301  USA
 #include "vdp1.h"
 #include "debug.h"
 #include "cs2.h"
+#include "vdp2_rotbank.h"
 
 //////////////////////////////////////////////////////////////////////////////
 
@@ -235,6 +236,10 @@ void Vdp2ReadRotationTable(int which, vdp2rotationparameter_struct *parameter, V
       parameter->linecoefenab = regs->KTCTL & 0x1000;
       parameter->screenover = (regs->PLSZ >> 14) & 0x3;
    }
+
+   // Banks RBG0 may read (RAMCTL RDBS). A parameter is computed for RBG0 here;
+   // the RBG1 draw overrides the masks for parameter B where the layer is known.
+   Vdp2RotBankMasks(regs->RAMCTL, regs->BGON, 0, &parameter->nt_bank_mask, &parameter->cg_bank_mask);
 
    i = T1ReadLong(ram, addr);
    parameter->Xst = (float) (signed) ((i & 0x1FFFFFC0) | (i & 0x10000000 ? 0xF0000000 : 0x00000000)) / 65536;

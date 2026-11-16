@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="pc_sign_in_title">Connexion</string>
+    <string name="pc_sign_in_google_title">Se connecter avec Google</string>
+    <string name="pc_sign_in_google_description">Sur Google Play Jeux pour PC, la connexion Google se fait dans le navigateur. Obtenez un code, puis saisissez-le sur la page Google depuis votre PC ou votre téléphone.</string>
+    <string name="pc_sign_in_get_code">Obtenir un code de connexion</string>
+    <string name="pc_sign_in_step_open">1. Ouvrez cette page dans un navigateur sur votre PC ou votre téléphone</string>
+    <string name="pc_sign_in_open_browser">Ouvrir dans le navigateur</string>
+    <string name="pc_sign_in_step_enter">2. Saisissez ce code et choisissez votre compte Google</string>
+    <string name="pc_sign_in_waiting">En attente de la fin de l\'opération dans le navigateur…</string>
+    <string name="pc_sign_in_signing_in">Connexion…</string>
+    <string name="pc_sign_in_denied">La connexion a été annulée dans le navigateur.</string>
+    <string name="pc_sign_in_expired">Le code a expiré. Obtenez un nouveau code et réessayez.</string>
+    <string name="pc_sign_in_failed">Échec de la connexion : %1$s</string>
+    <string name="pc_sign_in_new_code">Obtenir un nouveau code</string>
+    <string name="pc_sign_in_not_configured">La connexion Google n\'est pas disponible dans cette version.</string>
+    <string name="pc_sign_in_terms">En vous connectant, vous acceptez les Conditions d\'utilisation (yabasanshiro.com/terms-of-use) et la Politique de confidentialité (yabasanshiro.com/privacy).</string>
+</resources>

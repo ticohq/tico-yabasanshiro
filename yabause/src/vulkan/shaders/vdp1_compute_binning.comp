@@ -32,7 +32,7 @@ struct Vdp1Cmd {
     uint  vdp2Attrs;       // F18: bits 0:15 normalShadow, 16:31 attrFlags
     uint  priority;        // F18
     uint  colorcl;         // F18
-    uint  pad6;
+    uint  lineSteps;     // bits 0..15 dmax, bits 16..31 A->B length (raw Saturn)
     uint  pad7;
 };
 

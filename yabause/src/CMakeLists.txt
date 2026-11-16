@@ -24,7 +24,7 @@ set(yabause_HEADERS
 	peripheral.h profile.h
 	scsp.h scspdsp.h scu.h sh2core.h sh2d.h sh2iasm.h sh2idle.h sh2int.h sh2trace.h smpc.h sock.h
 	threads.h titan/titan.h
-	vdp1.h vdp2.h vdp2debug.h vidogl.h vidshared.h vidsoft.h
+	vdp1.h vdp2.h vdp2debug.h vdp2_rotbank.h vdpdump.h vidogl.h vidshared.h vidsoft.h
 	yabause.h ygl.h yui.h
 	shaders/FXAA_DefaultES.h
 	frameprofile.h
@@ -52,16 +52,17 @@ set(yabause_SOURCES
 	osdcore.c
 	peripheral.c profile.c
 	frameprofile.cpp
-	scspdsp.c scu.c sh2core.c sh2d.c sh2iasm.c sh2idle.c sh2int.c sh2trace.c smpc.c snddummy.c
+	scspdsp.c scu.c sh2core.c sh2d.c sh2iasm.c sh2idle.c sh2int.c sh2trace.c smpc.c snddummy.c sndwav.c
 	titan/titan.c
-	vdp1.cpp vdp2.cpp vdp2debug.c vidogl.c vidshared.c vidsoft.c
+	vdp1.cpp vdp2.cpp vdp2debug.c vdpdump.c vidogl.c vidshared.c vidsoft.c
 	yabause.c
 	Counter.cpp
 	#ygl_texture.cpp
 	BackupManager.cpp
 	jsoncpp.cpp
 	PlayRecorder.cpp
-	sh2cache.c )
+	sh2cache.c
+	crt/crt_layout.c )
 	add_definitions(-DIMPROVED_SAVESTATES)
 
 if (ANDROID)
@@ -77,7 +78,7 @@ if (ANDROID)
 	set(yabause_SOURCES
 		${yabause_SOURCES}
 		yglcache.c
-		ygles.c
+		ygles.c crt/crt_gl.c
 		yglshaderes.c 
 		nanovg/nanovg.c 
 		nanovg/nanovg_osdcore.h 
@@ -107,7 +108,7 @@ include_directories(./ ./nanovg)
 set(yabause_SOURCES
 	${yabause_SOURCES}
 	yglcache.c
-	ygles.c
+	ygles.c crt/crt_gl.c
 	yglshaderes.c 
 	nanovg/nanovg.c 
 	nanovg/nanovg_osdcore.h 
@@ -132,7 +133,7 @@ ENDIF()
 set(yabause_SOURCES
 ${yabause_SOURCES}
 yglcache.c
-ygles.c
+ygles.c crt/crt_gl.c
 yglshaderes.c )
 
 set(yabause_SOURCES ${yabause_SOURCES} sndCoreAudio.c)
@@ -237,7 +238,8 @@ if (YAB_USE_SCSP2)
 	set(yabause_SOURCES ${yabause_SOURCES} scsp2.c)
 	set(yabause_HEADERS ${yabause_HEADERS} scsp2.h)
 else()
-	set(yabause_SOURCES ${yabause_SOURCES} scsp.cpp)
+	set(yabause_SOURCES ${yabause_SOURCES} scsp.cpp sound_hq/scsp_hq.cpp sound_hq/dsp_float.cpp)
+	set(yabause_HEADERS ${yabause_HEADERS} sound_hq/scsp_hq.h sound_hq/dsp_float.h sound_hq/ram_watch.h)
 endif()
 
 # Enable SCSP MIDI hooks in sound interface
@@ -398,7 +400,7 @@ if (YAB_WANT_OPENGL AND (YAB_RGB STREQUAL ""))
 		#	add_definitions(-D_OGLES3_)
 			set(yabause_SOURCES ${yabause_SOURCES} 
 				yglcache.c
-				ygles.c
+				ygles.c crt/crt_gl.c
 				yglshaderes.c
 			)
 		#endif()
@@ -419,7 +421,7 @@ if (YAB_WANT_OPENGL AND (YAB_RGB STREQUAL ""))
 			endif()
 		endif()
 
-		set(yabause_SOURCES ${yabause_SOURCES} yglcache.c ygles.c yglshaderes.c )
+		set(yabause_SOURCES ${yabause_SOURCES} yglcache.c ygles.c crt/crt_gl.c yglshaderes.c )
 
 	endif(OPENGL_FOUND)
 endif ()
@@ -786,6 +788,8 @@ set( VULKAN_SOURCES
  vulkan/Vdp2Compositor.h
  vulkan/Vdp2SpriteDecoder.cpp
  vulkan/Vdp2SpriteDecoder.h
+ vulkan/CrtPresenter.cpp
+ vulkan/CrtPresenter.h
  vulkan/VIDVulkan.cpp
  vulkan/VIDVulkan.h
  vulkan/VIDVulkanCInterface.h

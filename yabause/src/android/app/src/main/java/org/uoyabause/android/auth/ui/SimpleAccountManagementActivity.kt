@@ -1125,7 +1125,7 @@ class SimpleAccountManagementActivity : AppCompatActivity() {
                     ),
                 ).build()
 
-        signInLauncher.launch(signInIntent)
+        signInLauncher.launch(PcSignInActivity.wrap(this, signInIntent))
     }
 
     private fun setupAccountActionsClickListeners() {
@@ -1290,7 +1290,7 @@ class SimpleAccountManagementActivity : AppCompatActivity() {
                     ),
                 ).build()
 
-        signInLauncher.launch(signInIntent)
+        signInLauncher.launch(PcSignInActivity.wrap(this, signInIntent))
     }
 
     private fun formatLastLoginTime(lastLoginTimeMillis: Long?): String = try {

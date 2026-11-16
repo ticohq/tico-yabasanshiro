@@ -46,7 +46,14 @@ class VdpPipelineWindow;
 
 #define WINDOW_CLIP_MODE (WINDOW_CLIP_STENCIL)
 
-#define MAX_VERTEX_COUNT (1024)
+// The line-table window emits up to 6 vertices per Saturn line (close the
+// previous span + open a new one). Size the buffer for the worst case at the
+// tallest Saturn resolution (512 lines, double-density PAL) so no span is ever
+// dropped. The old 1024 limit overflowed the mapped staging buffer on games
+// whose line window changes every line (SEGV_ACCERR in generateWindowInfo).
+#define MAX_WINDOW_LINES (512)
+#define MAX_VERTEX_PER_LINE (6)
+#define MAX_VERTEX_COUNT (MAX_WINDOW_LINES * MAX_VERTEX_PER_LINE + 16)
 
 struct WindowUbo {
   glm::mat4 model;
@@ -64,6 +71,16 @@ public:
   int isUpdated;
   Vertex * vertex;
   int vertexcnt;
+
+  // Appends one vertex to the mapped staging buffer. Never writes past
+  // MAX_VERTEX_COUNT: the buffer is host-mapped device memory, and writing
+  // beyond it faults instead of corrupting a neighbour.
+  void pushVertex(float x, float y) {
+    if (vertexcnt >= MAX_VERTEX_COUNT) return;
+    vertex[vertexcnt].pos.x = x;
+    vertex[vertexcnt].pos.y = y;
+    vertexcnt++;
+  }
 
   int width;
   int height;

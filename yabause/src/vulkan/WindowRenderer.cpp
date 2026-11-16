@@ -493,14 +493,9 @@ void WindowRenderer::generateWindowInfo(Vdp2 * fixVdp2Regs, int which) {
           w->info[v].WinShowLine = 0;
           // finish vertex
           if (w->info[v].WinShowLine != preshowline) {
-            w->vertex[w->vertexcnt].pos.y = v;
-            w->vertexcnt++;
-            w->vertex[w->vertexcnt].pos.x = preHEnd + 1;
-            w->vertex[w->vertexcnt].pos.y = v;
-            w->vertexcnt++;
-            w->vertex[w->vertexcnt].pos.x = preHEnd + 1; // add terminator
-            w->vertex[w->vertexcnt].pos.y = v;
-            w->vertexcnt++;
+            w->pushVertex(preHStart, v);
+            w->pushVertex(preHEnd + 1, v);
+            w->pushVertex(preHEnd + 1, v); // add terminator
           }
         }
         else {
@@ -533,68 +528,36 @@ void WindowRenderer::generateWindowInfo(Vdp2 * fixVdp2Regs, int which) {
           if (w->info[v].WinShowLine != preshowline) {
             // start vertex
             if (w->info[v].WinShowLine) {
-              w->vertex[w->vertexcnt].pos.x = HStart; // add terminator
-              w->vertex[w->vertexcnt].pos.y = v;
-              w->vertexcnt++;
-              w->vertex[w->vertexcnt].pos.x = HStart;
-              w->vertex[w->vertexcnt].pos.y = v;
-              w->vertexcnt++;
-              w->vertex[w->vertexcnt].pos.x = HEnd + 1;
-              w->vertex[w->vertexcnt].pos.y = v;
-              w->vertexcnt++;
+              w->pushVertex(HStart, v); // add terminator
+              w->pushVertex(HStart, v);
+              w->pushVertex(HEnd + 1, v);
             }
             // finish vertex
             else {
-              w->vertex[w->vertexcnt].pos.x = preHStart;
-              w->vertex[w->vertexcnt].pos.y = v;
-              w->vertexcnt++;
-              w->vertex[w->vertexcnt].pos.x = preHEnd + 1;
-              w->vertex[w->vertexcnt].pos.y = v;
-              w->vertexcnt++;
-              w->vertex[w->vertexcnt].pos.x = preHEnd + 1; // add terminator
-              w->vertex[w->vertexcnt].pos.y = v;
-              w->vertexcnt++;
+              w->pushVertex(preHStart, v);
+              w->pushVertex(preHEnd + 1, v);
+              w->pushVertex(preHEnd + 1, v); // add terminator
             }
           }
           else {
             if (w->info[v].WinShowLine) {
               if (HStart != preHStart || HEnd != preHEnd) {
                 // close line 
-                w->vertex[w->vertexcnt].pos.x = preHStart;
-                w->vertex[w->vertexcnt].pos.y = v;
-                w->vertexcnt++;
-                w->vertex[w->vertexcnt].pos.x = preHEnd + 1;
-                w->vertex[w->vertexcnt].pos.y = v;
-                w->vertexcnt++;
-                w->vertex[w->vertexcnt].pos.x = preHEnd + 1; // add terminator
-                w->vertex[w->vertexcnt].pos.y = v;
-                w->vertexcnt++;
+                w->pushVertex(preHStart, v);
+                w->pushVertex(preHEnd + 1, v);
+                w->pushVertex(preHEnd + 1, v); // add terminator
 
                 // start new line
-                w->vertex[w->vertexcnt].pos.x = HStart; // add terminator
-                w->vertex[w->vertexcnt].pos.y = v;
-                w->vertexcnt++;
-                w->vertex[w->vertexcnt].pos.x = HStart;
-                w->vertex[w->vertexcnt].pos.y = v;
-                w->vertexcnt++;
-                w->vertex[w->vertexcnt].pos.x = HEnd + 1;
-                w->vertex[w->vertexcnt].pos.y = v;
-                w->vertexcnt++;
+                w->pushVertex(HStart, v); // add terminator
+                w->pushVertex(HStart, v);
+                w->pushVertex(HEnd + 1, v);
               }
               // Close polygon, since reach the final line while WinShowLine is true
               else if (v == WPEY - 1) {
-                w->vertex[w->vertexcnt].pos.x = HStart;
-                w->vertex[w->vertexcnt].pos.y = v;
-                w->vertexcnt++;
-                w->vertex[w->vertexcnt].pos.x = HEnd + 1;
-                w->vertex[w->vertexcnt].pos.y = v;
-                w->vertexcnt++;
+                w->pushVertex(HStart, v);
+                w->pushVertex(HEnd + 1, v);
               }
             }
-          }
-
-          if (w->vertexcnt >= MAX_VERTEX_COUNT) {
-            w->vertexcnt = MAX_VERTEX_COUNT-1;
           }
 
           preHStart = HStart;

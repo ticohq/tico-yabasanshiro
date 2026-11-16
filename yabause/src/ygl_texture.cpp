@@ -29,6 +29,19 @@ extern "C" {
 }
 
 #include <math.h>
+#include "vdp2_rotbank.h"
+
+// The VRAM banks a rotation screen may read depend on the layer, not on the
+// rotation parameter: Vdp2ReadRotationTable() fills the RBG0 masks, and the
+// RBG1 draw (rgb_type 0x04, which uses parameter B) replaces them with the
+// fixed RBG1 banks. Both upload paths below go through here.
+static void rbgApplyLayerBankMasks(int rgb_type, vdp2rotationparameter_struct *a, vdp2rotationparameter_struct *b)
+{
+  if (rgb_type != 0x04) return;
+  Vdp2RotBankMasks(fixVdp2Regs->RAMCTL, fixVdp2Regs->BGON, 1, &a->nt_bank_mask, &a->cg_bank_mask);
+  b->nt_bank_mask = a->nt_bank_mask;
+  b->cg_bank_mask = a->cg_bank_mask;
+}
 
 #if defined(HAVE_VULKAN)
 #include "vulkan/VIDVulkan.h"
@@ -111,6 +124,8 @@ const char prg_generate_rbg_base[] =
 " int k_mem_type;\n"
 " uint over_pattern_name;\n"
 " int linecoefenab;\n"
+" uint nt_bank_mask;\n"
+" uint cg_bank_mask;\n"
 "};\n"
 "layout(std430, binding = 2) readonly buffer vdp2Param { \n"
 "  vdp2rotationparameter_struct para[2];\n"
@@ -152,9 +167,12 @@ const char prg_generate_rbg_base[] =
 "  vdp2WindowInfo pWinInfo[];\n"
 "};\n"
 "layout(std430, binding = 5) readonly buffer VDP2C { uint cram[]; };\n"
-" int GetKValue( int paramid, float posx, float posy, out float ky, out uint lineaddr ){ \n"
+// The coefficient table entry of whole Saturn pixel (px, py). lineaddr is
+// written on every path (0 when the entry carries no line colour code).
+" int GetKValueAt( int paramid, int px, int py, out float ky, out uint lineaddr ){ \n"
 "  uint kdata;\n"
-"  int kindex = int( ceil(para[paramid].deltaKAst*posy+(para[paramid].deltaKAx*posx)) ); \n"
+"  lineaddr = 0u;\n"
+"  int kindex = int( ceil(para[paramid].deltaKAst*float(py)+(para[paramid].deltaKAx*float(px))) ); \n"
 "  if (para[paramid].coefdatasize == 2) { \n"
 "    uint addr = ( uint( int(para[paramid].coeftbladdr) + (kindex<<1)) &0x7FFFFu); "
 "    if( para[paramid].k_mem_type == 0) { \n"
@@ -213,6 +231,60 @@ const char prg_generate_rbg_base[] =
 "	}\n"
 "	return true;\n"
 "}\n"
+
+// The Saturn pixel that contains the dot sampled at (posx, posy). posx/posy
+// are corner based (texel * scale), so this is the floor; the small margin
+// keeps a scale such as 1/6 (texel * scale = 0.99999994) from picking the
+// previous pixel. At the original resolution the positions are integers and
+// the margin changes nothing.
+"ivec2 rbg_dot_pixel(float posx, float posy) { return ivec2(floor(vec2(posx, posy) + 1.0e-4)); }\n"
+// Rotation parameter mode 3: set by prg_get_param_mode03 before it reads the
+// coefficient, so GetKValue knows the window picks the parameter set per dot.
+"bool rbg_param_mode3 = false;\n"
+// Mode 3: the parameter set VDP2 draws whole pixel p with (the same window
+// test prg_get_param_mode03 uses), p clamped to the Saturn screen.
+"int rbg_param_at(ivec2 p) {\n"
+"  ivec2 lim = ivec2(vec2(imageSize(outSurface)) * vec2(hres_scale, vres_scale) + 0.5) - 1;\n"
+"  p = clamp(p, ivec2(0), max(lim, ivec2(0)));\n"
+"  return isWindowInside(p.x, p.y) ? 0 : 1;\n"
+"}\n"
+// The coefficient at Saturn position (posx, posy). VDP2 reads the table at
+// whole pixels only, so at the original resolution every dot takes exactly
+// the entry of its pixel. Above it, a sample between pixels interpolates the
+// four entries around it: as 1/k when they share a sign (1/k is linear along a
+// plane in perspective), linearly otherwise. It holds the entry of the pixel
+// that contains the dot when one of the four is transparent or, in mode 3,
+// drawn by the other parameter set. Transparency and the line colour code
+// always come from that pixel.
+" int GetKValue( int paramid, float posx, float posy, out float ky, out uint lineaddr ){ \n"
+"  if (hres_scale == 1.0 && vres_scale == 1.0) return GetKValueAt(paramid, int(posx), int(posy), ky, lineaddr);\n"
+"  vec2 s = vec2(posx, posy);\n"
+"  ivec2 i0 = rbg_dot_pixel(posx, posy);\n"
+"  vec2 f = clamp(s - vec2(i0), 0.0, 1.0);\n"
+"  ivec2 n = i0;\n"
+"  if (GetKValueAt(paramid, n.x, n.y, ky, lineaddr) == -1) return -1;\n"
+"  if (f.x == 0.0 && f.y == 0.0) return 0;\n"
+"  if (rbg_param_mode3 && (rbg_param_at(i0) != paramid || rbg_param_at(i0 + ivec2(1, 0)) != paramid ||\n"
+"      rbg_param_at(i0 + ivec2(0, 1)) != paramid || rbg_param_at(i0 + ivec2(1, 1)) != paramid)) return 0;\n"
+"  vec4 q; uint la;\n"
+"  if (GetKValueAt(paramid, i0.x, i0.y, q.x, la) == -1) return 0;\n"
+"  if (GetKValueAt(paramid, i0.x + 1, i0.y, q.y, la) == -1) return 0;\n"
+"  if (GetKValueAt(paramid, i0.x, i0.y + 1, q.z, la) == -1) return 0;\n"
+"  if (GetKValueAt(paramid, i0.x + 1, i0.y + 1, q.w, la) == -1) return 0;\n"
+"  if (all(greaterThan(q, vec4(0.0))) || all(lessThan(q, vec4(0.0)))) {\n"
+"    vec4 iq = 1.0 / q;\n"
+"    ky = 1.0 / mix(mix(iq.x, iq.y, f.x), mix(iq.z, iq.w, f.x), f.y);\n"
+"  } else {\n"
+"    ky = mix(mix(q.x, q.y, f.x), mix(q.z, q.w, f.x), f.y);\n"
+"  }\n"
+"  return 0;\n"
+" }\n"
+
+// RAMCTL RDBS bank access rule (see vdp2_rotbank.h): a rotation screen reads
+// pattern names / character data only from the banks assigned to it; a read
+// from any other bank returns 0.
+"bool rbg_nt_bank_ok(int paramid, uint a) { return ((para[paramid].nt_bank_mask >> ((a >> 17) & 3u)) & 1u) != 0u; }\n"
+"bool rbg_cg_bank_ok(int paramid, uint a) { return ((para[paramid].cg_bank_mask >> ((a >> 17) & 3u)) & 1u) != 0u; }\n"
 
 "uint get_cram_msb(uint colorindex) { \n"
 "	uint colorval = 0u; \n"
@@ -280,6 +352,9 @@ const char prg_rbg_rpmd1_2w[] =
 "  }\n";
 
 
+// RPMD=2: the coefficient line colour code always comes from parameter A's
+// coefficient (gated by A's KLCE), even when the dot switches to parameter B.
+// B's coefficient is read into a scratch variable so lineaddr stays A's.
 const char prg_rbg_rpmd2_2w[] =
 "  paramid = 0; \n"
 "  ky = para[paramid].ky; \n"
@@ -287,8 +362,9 @@ const char prg_rbg_rpmd2_2w[] =
 "  if( para[paramid].coefenab != 0 ){ \n"
 "    if( GetKValue(paramid,posx,posy,ky,lineaddr ) == -1 ) { \n"
 "      paramid=1;\n"
+"      uint lineaddr_b = 0u; \n"
 "      if( para[paramid].coefenab != 0 ){ \n"
-"        if( GetKValue(paramid,posx,posy,ky,lineaddr ) == -1 ) { imageStore(outSurface,texel,vec4(0.0)); return;} \n"
+"        if( GetKValue(paramid,posx,posy,ky,lineaddr_b ) == -1 ) { imageStore(outSurface,texel,vec4(0.0)); return;} \n"
 "      }else{ \n"
 "        ky = para[paramid].ky; \n"
 "      }\n"
@@ -305,7 +381,8 @@ const char prg_rbg_rpmd2_2w[] =
 // plane, which made mode 3 render exactly like mode 0 - the switch was
 // invisible. vidsoft has always done it this way.
 const char prg_get_param_mode03[] =
-"  paramid = isWindowInside( int(posx), int(posy)) ? 0 : 1; \n"
+"  rbg_param_mode3 = true; \n"
+"  paramid = rbg_param_at(rbg_dot_pixel(posx, posy)); \n"
 "  ky = para[paramid].ky; \n"
 "  lineaddr = para[paramid].lineaddr; \n"
 "  if( para[paramid].coefenab != 0 ){ \n"
@@ -397,6 +474,7 @@ const char prg_rbg_get_patternaddr[] =
 const char prg_rbg_get_pattern_data_1w[] =
 "  if( patternname == 0xFFFFFFFFu){\n"
 "    patternname = vram[addr>>2]; \n" // WORD mode( patterndatasize == 1 )
+"    if( !rbg_nt_bank_ok(paramid, addr) ) patternname = 0u; \n"
 "    if( (addr & 0x02u) != 0u ) { patternname >>= 16; } \n"
 "    patternname = (((patternname>>8)&0xFFu) | ((patternname << 8) & 0xFFFFFF00u)) & 0xFFFFu;\n"
 "  }\n"
@@ -433,6 +511,7 @@ const char prg_rbg_get_pattern_data_1w[] =
 
 const char prg_rbg_get_pattern_data_2w[] =
 "  patternname = vram[addr>>2]; \n"
+"  if( !rbg_nt_bank_ok(paramid, addr) ) patternname = 0u; \n"
 "  uint tmp1 = patternname & 0x7FFFu; \n"
 "  charaddr = patternname >> 16; \n"
 "  charaddr = (((charaddr>>8)&0xFFu) | ((charaddr << 8) & 0xFFFFFF00u)) & 0xFFFFu;\n"
@@ -489,6 +568,7 @@ const char prg_rbg_getcolor_4bpp[] =
 "  float alpha = alpha_;\n"
 "  uint dotaddr = ((charaddr + uint(((y * cellw) + x) >> 1)) & 0x7FFFFu);\n"
 "  dot = vram[ dotaddr >> 2];\n"
+"  if( !rbg_cg_bank_ok(paramid, dotaddr) ) dot = 0u;\n"
 "  if( (dotaddr & 0x3u) == 0u ) dot >>= 0;\n"
 "  else if( (dotaddr & 0x3u) == 1u ) dot >>= 8;\n"
 "  else if( (dotaddr & 0x3u) == 2u ) dot >>= 16;\n"
@@ -540,6 +620,7 @@ const char prg_rbg_getcolor_8bpp[] =
 "  float alpha = alpha_;\n"
 "  uint dotaddr = charaddr + uint((y*cellw)+x);\n"
 "  dot = vram[ dotaddr >> 2];\n"
+"  if( !rbg_cg_bank_ok(paramid, dotaddr) ) dot = 0u;\n"
 "  if( (dotaddr & 0x3u) == 0u ) dot >>= 0;\n"
 "  else if( (dotaddr & 0x3u) == 1u ) dot >>= 8;\n"
 "  else if( (dotaddr & 0x3u) == 2u ) dot >>= 16;\n"
@@ -585,6 +666,7 @@ const char prg_rbg_getcolor_16bpp_palette[] =
 "  float alpha = alpha_;\n"
 "  uint dotaddr = charaddr + uint((y*cellw)+x) * 2u;\n"
 "  dot = vram[dotaddr>>2]; \n"
+"  if( !rbg_cg_bank_ok(paramid, dotaddr) ) dot = 0u;\n"
 "  if( (dotaddr & 0x02u) != 0u ) { dot >>= 16; } \n"
 "  dot = (((dot>>8)&0xFFu) | ((dot << 8) & 0xFFFFFF00u))&0xFFFFu;\n"
 "  //dot = (((dot) >> 8 & 0xFF) | ((dot) & 0xFF) << 8);\n"
@@ -601,6 +683,7 @@ const char prg_rbg_getcolor_16bpp_rbg[] =
 "  float alpha = alpha_;\n"
 "  uint dotaddr = charaddr + uint((y*cellw)+x) * 2u;\n"
 "  dot = vram[dotaddr>>2]; \n"
+"  if( !rbg_cg_bank_ok(paramid, dotaddr) ) dot = 0u;\n"
 "  if( (dotaddr & 0x02u) != 0u ) { dot >>= 16; } \n"
 "  dot = (((dot>>8)&0xFFu) | ((dot << 8) & 0xFFFFFF00u))&0xFFFFu;\n"
 "  //dot = (((dot >> 8) & 0xFFu) | ((dot) & 0xFFu) << 8);\n"
@@ -618,6 +701,7 @@ const char prg_rbg_getcolor_32bpp_rbg[] =
 "  float alpha = alpha_;\n"
 "  uint dotaddr = charaddr + uint((y*cellw)+x) * 4u;\n"
 "  dot = vram[dotaddr>>2]; \n"
+"  if( !rbg_cg_bank_ok(paramid, dotaddr) ) dot = 0u;\n"
 "  dot = ((dot&0xFF000000u) >> 24 | ((dot >> 8) & 0x0000FF00u) | ((dot<<8) & 0x00FF0000u) | (dot&0x000000FFu) << 24);\n"
 "  if ( (dot&0x80000000u) == 0u && transparencyenable != 0 ) { \n"
 "    cramindex = 0u; \n"
@@ -1187,9 +1271,9 @@ public:
     resize(width, height);
     if (ssbo_vram_ != 0) return; // always inisialized!
 
-    // SSBOまわり
-    GLint maxSSBOBindings = 0;                    // 全ステージ合計のバインドポイント
-    GLint maxCompSSBO     = 0;                    // Computeステージで使えるSSBO数
+    // SSBO limits
+    GLint maxSSBOBindings = 0;                    // binding points summed over all stages
+    GLint maxCompSSBO     = 0;                    // SSBOs usable by the compute stage
     glGetIntegerv(GL_MAX_SHADER_STORAGE_BUFFER_BINDINGS, &maxSSBOBindings);
     glGetIntegerv(GL_MAX_COMPUTE_SHADER_STORAGE_BLOCKS,   &maxCompSSBO);
 
@@ -2565,9 +2649,12 @@ public:
       //yprintf("glBindBufferBase %d",ssbo_cram_);
     //}
 
+    vdp2rotationparameter_struct upA = paraA;
+    vdp2rotationparameter_struct upB = paraB;
+    rbgApplyLayerBankMasks(rbg->rgb_type, &upA, &upB);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, ssbo_paraA_);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vdp2rotationparameter_struct), (void*)&paraA);
-    glBufferSubData(GL_SHADER_STORAGE_BUFFER, sizeof(vdp2rotationparameter_struct), sizeof(vdp2rotationparameter_struct), (void*)&paraB);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vdp2rotationparameter_struct), (void*)&upA);
+    glBufferSubData(GL_SHADER_STORAGE_BUFFER, sizeof(vdp2rotationparameter_struct), sizeof(vdp2rotationparameter_struct), (void*)&upB);
     ErrorHandle("glBufferSubData");
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, ssbo_paraA_);
 
@@ -2736,7 +2823,7 @@ RBGGeneratorVulkan::~RBGGeneratorVulkan() {
 
     // Destroy command resources
     if (commandPool) {
-      if (command[0]) {  // 少なくとも1つのコマンドバッファが割り当てられている場合
+      if (command[0]) {  // at least one command buffer was allocated
         device.freeCommandBuffers(commandPool, MAX_RBG_RENDER, command);
       }
       device.destroyCommandPool(commandPool);
@@ -3270,16 +3357,16 @@ vk::Pipeline RBGGeneratorVulkan::compile_color_dot(
   std::string hashval = std::to_string(hash_value);
   string file_path = mempath + hashval + ".spv";
 
-  // バイナリファイルを読み込む
+  // read the binary file
   std::ifstream file(file_path, std::ios::binary);
   if (file) {
 
-    // ファイルサイズを取得する
+    // get the file size
     file.seekg(0, std::ios::end);
     std::size_t file_size = file.tellg();
     file.seekg(0, std::ios::beg);
 
-    // ファイルの内容を読み込む
+    // read the file contents
     data.resize(file_size / sizeof(uint32_t));
     file.read(reinterpret_cast<char*>(data.data()), file_size);
     file.close();
@@ -3311,10 +3398,10 @@ vk::Pipeline RBGGeneratorVulkan::compile_color_dot(
         throw std::runtime_error("failed to create shader module!");
     }
 
-    // データを書き込む
+    // write the data
     file.write(reinterpret_cast<char*>(data.data()), data.size() * sizeof(uint32_t));
 
-    // ファイルを閉じる
+    // close the file
     file.close();
   }
 //#endif
@@ -4563,8 +4650,11 @@ void RBGGeneratorVulkan::update(VIDVulkan::RBGDrawInfo * rbg, const vdp2rotation
 
   int asize = getAllainedSize(sizeof(vdp2rotationparameter_struct));
   data = d.mapMemory(ssbo_paraA_.mem, 0, asize*2);
-  memcpy(data, &paraa, sizeof(vdp2rotationparameter_struct) );
-  memcpy(((char*)data + sizeof(vdp2rotationparameter_struct)), &parab, sizeof(vdp2rotationparameter_struct));
+  vdp2rotationparameter_struct upA = paraa;
+  vdp2rotationparameter_struct upB = parab;
+  rbgApplyLayerBankMasks(rbg->rgb_type, &upA, &upB);
+  memcpy(data, &upA, sizeof(vdp2rotationparameter_struct) );
+  memcpy(((char*)data + sizeof(vdp2rotationparameter_struct)), &upB, sizeof(vdp2rotationparameter_struct));
   d.unmapMemory(ssbo_paraA_.mem);
 
   rbgUniformParam->hres_scale = 1.0 / rbg->rotate_mval_h;

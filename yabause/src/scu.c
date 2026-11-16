@@ -3496,9 +3496,21 @@ void ScuRemoveVBlankOut() {
 
 //////////////////////////////////////////////////////////////////////////////
 
+// End of horizontal blanking. Only the slave SH2 loses an HBlank request
+// here: its IRL is driven straight from the VDP2 HBlank/VBlank signals, so the
+// request is gone once the signal drops (mednafen ss/scu.inc, CPU[1].SetIRL).
+// The master's HBlank-IN goes through the SCU, which latches it in IPending on
+// the rising edge and keeps it asserted on the master's IRL until the vector
+// fetch acknowledges it; the end of HBlank does not withdraw it.
+//
+// Withdrawing the master's request here dropped every HBlank-IN the master
+// had not accepted within the one deciline between HBLANK-IN and HBLANK-OUT.
+// That happens whenever the dynarec skips a slice to pay back an overshoot
+// (a store loop into slow memory runs a block well past the slice end), even
+// with SR at 0. Lunar: Silver Star Story counts HBlank-IN interrupts to place
+// its text box, lost 5-15 of them per frame at the top of the screen, and the
+// box jumped up and down by that many lines (GitLab #173).
 void ScuRemoveHBlankIN() {
-  //ScuRemoveInterrupt(0x42, 0x0D, 0x0004);
-  SH2RemoveInterrupt(MSH2, 0x42, 0x0D);
   SH2RemoveInterrupt(SSH2, 0x41, 0x0D);
 }
 

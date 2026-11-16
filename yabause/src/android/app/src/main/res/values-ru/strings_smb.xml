@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="smb_card_title">Из общей папки (SMB)</string>
+    <string name="smb_card_desc">Импорт образов игр, созданных с ваших собственных дисков, с ПК или NAS в домашней сети</string>
+    <string name="smb_dialog_title">Общая папка (SMB)</string>
+    <string name="smb_pc_hint">Откройте общий доступ к папке в Windows (Свойства &gt; Доступ). В поле хоста введите IP-адрес этого ПК в домашней сети: выполните ipconfig в командной строке и используйте IPv4-адрес (например, 192.168.x.x). Войдите с локальной учётной записью Windows, у которой есть доступ к папке; с учётной записью Microsoft вход в общие папки часто не работает.</string>
+    <string name="smb_host">Имя хоста или IP-адрес</string>
+    <string name="smb_share">Имя общего ресурса</string>
+    <string name="smb_username">Имя пользователя (необязательно)</string>
+    <string name="smb_password">Пароль</string>
+    <string name="smb_domain">Домен (необязательно)</string>
+    <string name="smb_remember">Запомнить это подключение</string>
+    <string name="smb_connect">Подключиться</string>
+    <string name="smb_import">Импортировать</string>
+    <string name="smb_import_count">Импортировать (%1$d)</string>
+    <string name="smb_cancel_import">Отменить импорт</string>
+    <string name="smb_up_folder">.. (на уровень вверх)</string>
+    <string name="smb_empty">Здесь нет папок и файлов игр</string>
+    <string name="smb_progress_format">%1$s\n%2$d / %3$d файлов, %4$s из %5$s</string>
+    <string name="smb_extracting">Распаковка %1$s</string>
+    <string name="smb_error_host_required">Введите хост и имя общего ресурса</string>
+    <string name="smb_error_auth">Не удалось войти. Проверьте имя пользователя, пароль и домен.</string>
+    <string name="smb_error_share_not_found">Общий ресурс не найден. Проверьте его имя.</string>
+    <string name="smb_error_unreachable">Не удаётся подключиться к хосту. Проверьте адрес и включён ли общий доступ к файлам.</string>
+    <string name="smb_error_timeout">Хост не ответил вовремя.</string>
+    <string name="smb_error_access_denied">Доступ запрещён.</string>
+    <string name="smb_error_not_found">Файл не найден в общем ресурсе.</string>
+    <string name="smb_error_other">Ошибка общей папки: %1$s</string>
+    <string name="smb_import_done">Импортировано игр: %1$d</string>
+    <string name="smb_import_cancelled">Импорт отменён</string>
+    <string name="smb_import_no_game">В импортированных файлах не найдено игр</string>
+    <string name="smb_purpose_hint">Импортируйте образы игр, созданные с принадлежащих вам дисков, из общей папки на ПК или NAS в той же сети. Серверы в интернете использовать нельзя.</string>
+    <string name="smb_error_not_local">Можно использовать только ПК и NAS в локальной сети. Введите локальный адрес, например 192.168.x.x.</string>
+    <string name="smb_free_limit_none">В бесплатной версии можно добавить до %1$d игр. Оформите подписку, чтобы добавить больше.</string>
+    <string name="smb_free_limit_some">В бесплатной версии можно добавить до %1$d игр: осталось %2$d, а выбрано %3$d. Выберите меньше игр или оформите подписку.</string>
+</resources>

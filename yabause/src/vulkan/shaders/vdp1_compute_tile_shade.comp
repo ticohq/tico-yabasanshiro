@@ -72,7 +72,7 @@ struct Vdp1Cmd {
     uint  vdp2Attrs;    // F18: bits 0:15 normalShadow, 16:31 attrFlags
     uint  priority;     // F18: VDP2 sprite priority slot index 0-7
     uint  colorcl;      // F18: VDP2 color-calc slot index 0-7
-    uint  pad6;
+    uint  lineSteps;     // bits 0..15 dmax, bits 16..31 A->B length (raw Saturn)
     uint  pad7;
 };
 
@@ -305,10 +305,9 @@ vec4 packShadowWithPri(uint priority, Vdp1Cmd cmd) {
 // reference values; cm=3 here uses 0x7F (the actual 7-bit mask) so the check
 // can ever fire (vidsoft's 0xFF was dead code due to Pattern128 masking).
 // =============================================================================
-vec4 sample16bppRGB(Vdp1Cmd cmd, vec2 uv, bool spd, bool endcEnabled) {
+vec4 sample16bppRGB(Vdp1Cmd cmd, vec2 uv, uint v, bool spd, bool endcEnabled) {
     uvec2 charSize = cmd.charSize;
     uint u = uint(clamp(uv.x * float(charSize.x), 0.0, float(charSize.x) - 1.0));
-    uint v = uint(clamp(uv.y * float(charSize.y), 0.0, float(charSize.y) - 1.0));
     // End-code terminator scan — see sample4bppLut. 16bpp end-code value is
     // 0x7FFF (15-bit "all ones" with high bit clear). Mirrors graphics path
     // ordering (Vdp1Renderer.cpp:4130-4136): the post-2nd-end-code rows
@@ -363,10 +362,9 @@ vec4 sample16bppRGB(Vdp1Cmd cmd, vec2 uv, bool spd, bool endcEnabled) {
     if (msb || ns) return packShadowWithPri(pri, cmd);
     return packPaletteWithAttrs(masked, pri, cc, cmd);
 }
-vec4 sample4bppBank(Vdp1Cmd cmd, vec2 uv, uint colorBank, bool spd, bool endcEnabled) {
+vec4 sample4bppBank(Vdp1Cmd cmd, vec2 uv, uint v, uint colorBank, bool spd, bool endcEnabled) {
     uvec2 charSize = cmd.charSize;
     uint u = uint(clamp(uv.x * float(charSize.x), 0.0, float(charSize.x) - 1.0));
-    uint v = uint(clamp(uv.y * float(charSize.y), 0.0, float(charSize.y) - 1.0));
     // End-code terminator scan — see sample4bppLut for the rationale. 4bpp
     // Bank uses the same dot==0xF end-code value as LUT; once the row has
     // accumulated 2 end-codes ALL subsequent pixels are transparent.
@@ -403,10 +401,9 @@ vec4 sample4bppBank(Vdp1Cmd cmd, vec2 uv, uint colorBank, bool spd, bool endcEna
     if ((colorindex & 0x8000u) != 0u && spctlRgb_4b) return packDirect(colorindex, cmd);
     return packPalette(colorindex, cmd);
 }
-vec4 sample4bppLut(Vdp1Cmd cmd, vec2 uv, uint colorLut, bool spd, bool endcEnabled) {
+vec4 sample4bppLut(Vdp1Cmd cmd, vec2 uv, uint v, uint colorLut, bool spd, bool endcEnabled) {
     uvec2 charSize = cmd.charSize;
     uint u = uint(clamp(uv.x * float(charSize.x), 0.0, float(charSize.x) - 1.0));
-    uint v = uint(clamp(uv.y * float(charSize.y), 0.0, float(charSize.y) - 1.0));
 
     // Saturn end-code (F9) — graphics path Vdp1Renderer.cpp case 1 lines
     // 3940-3943 + 3936: when ECD bit is CLEAR (endcEnabled=true here),
@@ -471,10 +468,9 @@ vec4 sample4bppLut(Vdp1Cmd cmd, vec2 uv, uint colorLut, bool spd, bool endcEnabl
     if (msb || ns) return packShadowWithPri(pri, cmd);
     return packPaletteWithAttrs(masked, pri, cc, cmd);
 }
-vec4 sample8bppBank(Vdp1Cmd cmd, vec2 uv, uint colorBank, uint palMask, bool spd, bool endcEnabled) {
+vec4 sample8bppBank(Vdp1Cmd cmd, vec2 uv, uint v, uint colorBank, uint palMask, bool spd, bool endcEnabled) {
     uvec2 charSize = cmd.charSize;
     uint u = uint(clamp(uv.x * float(charSize.x), 0.0, float(charSize.x) - 1.0));
-    uint v = uint(clamp(uv.y * float(charSize.y), 0.0, float(charSize.y) - 1.0));
     // End-code terminator scan — see sample4bppLut. 8bpp end-code value is
     // (dot & palMask) == palMask (per palMask-bit width: 0x3F/0x7F/0xFF).
     if (endcEnabled) {
@@ -709,6 +705,82 @@ vec2 triBary(vec2 p,
 
 vec2 computeUV(vec2 P, Vdp1Cmd c) {
     return clamp(inverseBilinear(P, vec2(c.v0), vec2(c.v1), vec2(c.v2), vec2(c.v3)), 0.0, 1.0);
+}
+
+// =============================================================================
+// Texture row selection (Saturn line stepping). VDP1 draws a textured
+// command as dmax + 1 lines between edges A->D and B->C, where dmax is the
+// longest Chebyshev length of those two edges, and picks each line's texture
+// row with an error term (the reference software renderer, ss/vdp1_common.h
+// VileTex::Setup and the per-line PreStep in ss/vdp1_sprite.cpp). Along a
+// line the texture column is stepped the same way per dot (ss/vdp1.cpp line
+// setup, ss/vdp1_common.h DrawLine). vdp1TexRow is the closed form of that
+// stepping; it must match Vdp1ComputeMath.cpp::vdp1TexRow (checked against
+// the stepping for every size in vdp1_compute_math_test).
+// =============================================================================
+int vdp1TexRow(int k, int n, int t0, int t1) {
+    int dt = t1 - t0;
+    int adt = abs(dt);
+    int rev = dt < 0 ? 1 : 0;
+    int inc; int adj; int e;
+    if (n <= adt) { inc = 2 * (adt + 1); adj = 2 * n;       e = adt + 1 - (2 * n + rev); }
+    else          { inc = 2 * adt;       adj = 2 * (n - 1); e = n - (2 * n - rev); }
+    e += k * inc;
+    int m = (e >= 0 && adj != 0) ? e / adj + 1 : 0;
+    return rev != 0 ? t0 - m : t0 + m;
+}
+// dmax and the A->B dot count minus one, computed on the host from the raw
+// Saturn vertices (Vdp1ComputeMath.cpp::packSpriteSteps) and carried in
+// Vdp1Cmd::lineSteps; the fb-pixel vertices are truncated after scaling and
+// cannot give them back exactly at non-integer scales.
+int cmdDmax(Vdp1Cmd c) { return int(c.lineSteps & 0xFFFFu); }
+int cmdLenAB(Vdp1Cmd c) { return int(c.lineSteps >> 16); }
+// One-line sprite: both side edges have length 0 (A == D, B == C), so the
+// hardware draws the single line A->B. The quad has no interior, so the
+// inverse bilinear solve degenerates (0/0) and cannot give the column.
+bool isOneLineSprite(Vdp1Cmd c) {
+    return c.cmdType == TYPE_DISTORTED_SPRITE && c.v0 == c.v3 && c.v1 == c.v2;
+}
+// Parameter of fb point P along A->B of a one-line sprite, measured at the
+// Saturn cell centre (P minus half a cell, see spriteTexRow).
+float oneLineParam(vec2 P, Vdp1Cmd c) {
+    vec2 e = vec2(c.v1 - c.v0);
+    float ee = dot(e, e);
+    if (ee <= 0.0) return 0.0;
+    vec2 q = P - 0.5 * vec2(pc.scaleX, pc.scaleY) - vec2(c.v0);
+    return clamp(dot(q, e) / ee, 0.0, 1.0);
+}
+// Texture column (flip applied) of the dot of a one-line sprite nearest to P.
+uint oneLineTexU(vec2 P, Vdp1Cmd c) {
+    int len = cmdLenAB(c);
+    int j = int(roundEven(oneLineParam(P, c) * float(len)));
+    int w = int(c.charSize.x);
+    bool flipH = (c.flip & 1u) != 0u;
+    return uint(vdp1TexRow(j, len + 1, flipH ? w - 1 : 0, flipH ? 0 : w - 1));
+}
+// Texture row (flip applied) of the Saturn line that covers fb point P.
+// Vertex (x, y) names Saturn cell (x, y), whose centre is half a cell past
+// the vertex in fb space, so the line parameter is solved at P minus half a
+// cell; line k then owns parameters within half a line of k / dmax.
+uint spriteTexRow(vec2 P, Vdp1Cmd c) {
+    int dmax = cmdDmax(c);
+    int k = 0;
+    if (dmax > 0) {
+        vec2 q = P - 0.5 * vec2(pc.scaleX, pc.scaleY);
+        float t;
+        if (c.v0 == c.v1 && c.v3 == c.v2) {
+            // Zero-width quad (A == B, D == C): every line is one dot on
+            // the A->D edge, so the line parameter is the projection on it.
+            vec2 e = vec2(c.v3 - c.v0);
+            t = dot(q - vec2(c.v0), e) / dot(e, e);
+        } else {
+            t = inverseBilinear(q, vec2(c.v0), vec2(c.v1), vec2(c.v2), vec2(c.v3)).y;
+        }
+        k = int(roundEven(clamp(t, 0.0, 1.0) * float(dmax)));
+    }
+    int h = int(c.charSize.y);
+    bool flipV = (c.flip & 2u) != 0u;
+    return uint(vdp1TexRow(k, dmax + 1, flipV ? h - 1 : 0, flipV ? 0 : h - 1));
 }
 
 // =============================================================================
@@ -1007,7 +1079,8 @@ vec4 applyCmd(ivec2 pix, Vdp1Cmd c, vec4 dst) {
             // sprite meshes close their tiny inter-poly gaps even when
             // both edges round to the same screen pixel.
             if (!insideOrOnEdge(P, v0e, v1e, v2e, v3e, thrSq, c.flags)) return dst;
-            uv = computeUV(P, c);
+            uv = isOneLineSprite(c) ? vec2(oneLineParam(P, c), 0.0)
+                                    : computeUV(P, c);
         } else if ((c.flags & FLAG_TRI_SPLIT) != 0u) {
             // F13: concave / twisted / degenerate quad split into triangles
             // (v0,v1,v2) and (v0,v2,v3). Coverage = union of both triangles;
@@ -1108,8 +1181,16 @@ vec4 applyCmd(ivec2 pix, Vdp1Cmd c, vec4 dst) {
             // correct relative to screen TL/TR/BR/BL.
             vec2 texUv = uv;
             if ((c.flip & 1u) != 0u) texUv.x = 1.0 - texUv.x;
-            if ((c.flip & 2u) != 0u) texUv.y = 1.0 - texUv.y;
+            // Texture row: the Saturn line stepping (flip included),
+            // not a texture-space V. See spriteTexRow.
+            uint texV = min(spriteTexRow(P, c), c.charSize.y - 1u);
             texUv = clamp(texUv, 0.0, 1.0);
+            // One-line sprite: the column is the per-dot stepping along
+            // A->B (flip included), placed at the texel centre so the
+            // samplers' floor(uv.x * w) returns it unchanged.
+            if (isOneLineSprite(c)) {
+                texUv.x = (float(oneLineTexU(P, c)) + 0.5) / float(c.charSize.x);
+            }
             uint cm = (c.pmod >> 3) & 7u;
             bool spd = (c.pmod & 0x40u) != 0u;
             // ECD (CMDPMOD bit 7): CLEAR = end-code processing enabled. Only
@@ -1117,12 +1198,12 @@ vec4 applyCmd(ivec2 pix, Vdp1Cmd c, vec4 dst) {
             // sprite-only so the gate is unconditional. Polygon/Polyline/Line
             // do not sample textures so end-code never fires there.
             bool endc = (c.pmod & 0x80u) == 0u;
-            if      (cm == 0u) src = sample4bppBank(c, texUv, c.color & 0xFFF0u, spd, endc);
-            else if (cm == 1u) src = sample4bppLut (c, texUv, c.color * 8u,      spd, endc);
-            else if (cm == 2u) src = sample8bppBank(c, texUv, c.color & 0xFFC0u, 0x3Fu, spd, endc);
-            else if (cm == 3u) src = sample8bppBank(c, texUv, c.color & 0xFF80u, 0x7Fu, spd, endc);
-            else if (cm == 4u) src = sample8bppBank(c, texUv, c.color & 0xFF00u, 0xFFu, spd, endc);
-            else if (cm == 5u) src = sample16bppRGB(c, texUv, spd, endc);
+            if      (cm == 0u) src = sample4bppBank(c, texUv, texV, c.color & 0xFFF0u, spd, endc);
+            else if (cm == 1u) src = sample4bppLut (c, texUv, texV, c.color * 8u,      spd, endc);
+            else if (cm == 2u) src = sample8bppBank(c, texUv, texV, c.color & 0xFFC0u, 0x3Fu, spd, endc);
+            else if (cm == 3u) src = sample8bppBank(c, texUv, texV, c.color & 0xFF80u, 0x7Fu, spd, endc);
+            else if (cm == 4u) src = sample8bppBank(c, texUv, texV, c.color & 0xFF00u, 0xFFu, spd, endc);
+            else if (cm == 5u) src = sample16bppRGB(c, texUv, texV, spd, endc);
             else return dst;
             if (src.a < 0.5) return dst;
         }

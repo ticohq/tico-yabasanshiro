@@ -52,6 +52,8 @@
 
     <!-- Minimum touch target size (M3 accessibility requirement) -->
     <dimen name="min_touch_target">48dp</dimen>
+    <!-- Width of the keyboard mapping overlay shown at game start -->
+    <dimen name="keyboard_map_overlay_width">320dp</dimen>
 
     <!-- Legacy - kept for backward compatibility -->
     <dimen name="card_corner_radius">5dp</dimen>

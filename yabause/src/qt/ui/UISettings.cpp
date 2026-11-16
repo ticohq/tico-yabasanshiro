@@ -97,6 +97,16 @@ const Items mRbgResolutionMode = Items()
 << Item("3", "1080P")
 << Item("4", "Fit to Emulation Resolution");
 
+// Output filter; the ids are the AAMODE values of ygl.h
+const Items mFilterMode = Items()
+<< Item("0", "None")
+<< Item("1", "FXAA")
+<< Item("2", "Scanline")
+<< Item("3", "Bilinear")
+<< Item("4", "CRT Hyllian")
+<< Item("5", "CRT Lottes")
+<< Item("6", "CRT NewPixie");
+
 const Items mEmulationSpeed = Items()
 << Item("0", "1x")
 << Item("2", "2x")
@@ -470,9 +480,14 @@ void UISettings::loadCores()
   foreach(const Item& it, mRbgResolutionMode)
     cbRBGREsolution->addItem(QtYabause::translate(it.Name), it.id);
 
+  // Filter
+  foreach(const Item& it, mFilterMode)
+    cbFilter->addItem(QtYabause::translate(it.Name), it.id);
+
 	// SND Drivers
 	for ( int i = 0; SNDCoreList[i] != NULL; i++ )
-		cbSoundCore->addItem( QtYabause::translate( SNDCoreList[i]->Name ), SNDCoreList[i]->id );
+		if ( SNDCoreList[i]->id != SNDCORE_WAV )  // developer core (--sound-wav=FILE)
+			cbSoundCore->addItem( QtYabause::translate( SNDCoreList[i]->Name ), SNDCoreList[i]->id );
 	
 	// Cartridge Types
 	foreach ( const Item& it, mCartridgeTypes )
@@ -634,6 +649,7 @@ void UISettings::loadSettings()
 	cbPolygonGeneration->setCurrentIndex(cbPolygonGeneration->findData(s->value("Video/polygon_generation_mode", mPolygonGenerationMode.at(2).id).toInt()));
   cbResolution->setCurrentIndex(cbResolution->findData(s->value("Video/resolution_mode", mResolutionMode.at(0).id).toInt()));
   cbRBGREsolution->setCurrentIndex(cbRBGREsolution->findData(s->value("Video/rbg_resolution_mode", mRbgResolutionMode.at(5).id).toInt()));
+  cbFilter->setCurrentIndex(cbFilter->findData(s->value("Video/filter_mode", mFilterMode.at(0).id).toInt()));
 //   cbEnableIntegerPixelScaling->setChecked(s->value("Video/EnableIntegerPixelScaling", false).toBool());
 //   sbIntegerPixelScalingMultiplier->setValue(s->value("Video/IntegerPixelScalingMultiplier", 2).toInt());
    cbRotateScreen->setChecked(s->value("Video/RotateScreen").toBool());
@@ -652,6 +668,8 @@ void UISettings::loadSettings()
 //   cbNewScsp->setChecked(s->value("Sound/NewScsp", true).toBool());
    spinBox_scs_sync_count->setValue(s->value("Sound/ScspSync", 16).toInt());
    cbTimeMode->setCurrentIndex(s->value("Sound/ScspMainMode", 0).toInt());
+   // Only the new SCSP renders it; this port always runs the new SCSP.
+   cbSoundHighQuality->setChecked(s->value("Sound/HighQuality", false).toBool());
 
 	// cartridge/memory
 	cbCartridge->setCurrentIndex( cbCartridge->findData( s->value( "Cartridge/Type", mCartridgeTypes.at( 0 ).id ).toInt() ) );
@@ -749,6 +767,7 @@ void UISettings::saveSettings()
 	s->setValue( "Video/polygon_generation_mode", cbPolygonGeneration->itemData(cbPolygonGeneration->currentIndex()).toInt());
   s->setValue("Video/resolution_mode", cbResolution->itemData(cbResolution->currentIndex()).toInt());
   s->setValue("Video/rbg_resolution_mode", cbRBGREsolution->itemData(cbRBGREsolution->currentIndex()).toInt());
+  s->setValue("Video/filter_mode", cbFilter->itemData(cbFilter->currentIndex()).toInt());
   s->setValue("Video/UseComputeShader", cbUseComputeShader->isChecked());
 //   s->setValue("Video/EnableIntegerPixelScaling", cbEnableIntegerPixelScaling->isChecked());
 //   s->setValue("Video/IntegerPixelScalingMultiplier", sbIntegerPixelScalingMultiplier->value());
@@ -766,6 +785,7 @@ void UISettings::saveSettings()
 
   s->setValue("Sound/ScspSync", spinBox_scs_sync_count->value() );
   s->setValue("Sound/ScspMainMode", cbTimeMode->currentIndex() );
+  s->setValue("Sound/HighQuality", cbSoundHighQuality->isChecked() );
 
 	// sound
 	s->setValue( "Sound/SoundCore", cbSoundCore->itemData( cbSoundCore->currentIndex() ).toInt() );
