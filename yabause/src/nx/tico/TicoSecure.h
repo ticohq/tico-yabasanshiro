@@ -20,9 +20,11 @@
 
 #include <sodium.h>
 
+#include <cerrno>
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -92,26 +94,71 @@ constexpr const char kAd[] = "tico-secure-v1";
 /// @brief False when this build fell back to the development secret.
 inline bool HasBuildSecret() { return detail::BuildSecret().fromBuild; }
 
+#ifdef __SWITCH__
+namespace detail {
+// libsodium's own generator reads /dev/urandom, which Horizon does not have:
+// sodium_init() would abort. libnx's randomGet is seeded by the kernel.
+inline const char *RandomName() { return "libnx"; }
+inline std::uint32_t RandomU32() {
+  std::uint32_t value;
+  randomGet(&value, sizeof(value));
+  return value;
+}
+inline void RandomStir() {}
+inline void RandomBuf(void *buf, const std::size_t size) { randomGet(buf, size); }
+inline int RandomClose() { return 0; }
+} // namespace detail
+#endif
+
 inline bool Init() {
-  static const bool ready = sodium_init() >= 0;
+  static const bool ready = [] {
+#ifdef __SWITCH__
+    static randombytes_implementation random = {detail::RandomName, detail::RandomU32,
+                                                detail::RandomStir, nullptr,
+                                                detail::RandomBuf, detail::RandomClose};
+    randombytes_set_implementation(&random);
+#endif
+    return sodium_init() >= 0;
+  }();
   return ready;
 }
+
+namespace detail {
+// How DeviceId() got its value, for the session log: the serial, or why not.
+inline std::string &DeviceIdSource() {
+  static std::string source;
+  return source;
+}
+} // namespace detail
 
 /// @brief Something only this console has. The serial on Switch.
 inline std::string DeviceId() {
   static std::string id;
   if (!id.empty())
     return id;
+  char why[64] = "not a Switch";
 #ifdef __SWITCH__
-  if (R_SUCCEEDED(setsysInitialize())) {
+  const Result init = setsysInitialize();
+  if (R_SUCCEEDED(init)) {
     SetSysSerialNumber serial{};
-    if (R_SUCCEEDED(setsysGetSerialNumber(&serial)))
+    const Result got = setsysGetSerialNumber(&serial);
+    if (R_SUCCEEDED(got))
       id.assign(serial.number, strnlen(serial.number, sizeof(serial.number)));
+    else
+      std::snprintf(why, sizeof(why), "setsysGetSerialNumber failed 0x%x", got);
     setsysExit();
+    if (R_SUCCEEDED(got) && id.empty())
+      std::snprintf(why, sizeof(why), "serial is empty");
+  } else {
+    std::snprintf(why, sizeof(why), "setsysInitialize failed 0x%x", init);
   }
 #endif
-  if (id.empty())
+  if (id.empty()) {
     id = "tico-desktop";
+    detail::DeviceIdSource() = std::string("fallback (") + why + ")";
+  } else {
+    detail::DeviceIdSource() = "serial";
+  }
   return id;
 }
 
@@ -213,37 +260,89 @@ inline const char *SessionPath() {
 #endif
 }
 
+/// @brief One line in sdmc:/tico/run/session.log, written even by release
+/// builds: whether tico wrote the session and whether the core opened it.
+/// It names no secret and no serial: only a short fingerprint of the key, so
+/// tico's line and the core's can be compared.
+inline void SessionLog(const char *side, const std::string &what) {
+#ifdef __SWITCH__
+  const char *path = "sdmc:/tico/run/session.log";
+#else
+  const char *path = "tico/run/session.log";
+#endif
+  // Kept small: started over once it passes 64 KB
+  FILE *file = std::fopen(path, "ab");
+  if (file && std::ftell(file) > 64 * 1024) {
+    std::fclose(file);
+    file = std::fopen(path, "wb");
+  }
+  if (!file)
+    return;
+  std::uint8_t probe[32] = {};
+  if (Init())
+    Key("session-log-fingerprint", probe);
+  char when[32] = "";
+  const std::time_t now = std::time(nullptr);
+  if (const std::tm *local = std::localtime(&now))
+    std::strftime(when, sizeof(when), "%Y-%m-%d %H:%M:%S", local);
+  std::fprintf(file, "%s %s: %s | device id: %s, key %02x%02x%02x%02x, build secret: %s\n", when,
+               side, what.c_str(), detail::DeviceIdSource().c_str(), probe[0], probe[1], probe[2],
+               probe[3], HasBuildSecret() ? "yes" : "NO (development key)");
+  sodium_memzero(probe, sizeof(probe));
+  std::fclose(file);
+}
+
 inline bool WriteSession(const std::string &json) {
   const std::vector<std::uint8_t> sealed = Seal("core-session", json);
-  if (sealed.empty())
+  if (sealed.empty()) {
+    SessionLog("tico", "write FAILED: could not seal (libsodium did not start)");
     return false;
+  }
   const std::string path = SessionPath();
   const std::string temp = path + ".tmp";
   FILE *file = std::fopen(temp.c_str(), "wb");
-  if (!file)
+  if (!file) {
+    SessionLog("tico", "write FAILED: cannot create " + temp + " (" + std::strerror(errno) + ")");
     return false;
+  }
   const bool ok = std::fwrite(sealed.data(), 1, sealed.size(), file) == sealed.size();
   std::fclose(file);
   if (!ok) {
+    SessionLog("tico", "write FAILED: short write to " + temp);
     std::remove(temp.c_str());
     return false;
   }
   std::remove(path.c_str());
-  return std::rename(temp.c_str(), path.c_str()) == 0;
+  if (std::rename(temp.c_str(), path.c_str()) != 0) {
+    SessionLog("tico", "write FAILED: cannot rename to " + path + " (" + std::strerror(errno) + ")");
+    return false;
+  }
+  SessionLog("tico", "wrote session, " + std::to_string(sealed.size()) + " bytes");
+  return true;
 }
 
 /// @brief The session tico wrote, or false (none, another console, changed).
 inline bool ReadSession(std::string &json) {
   FILE *file = std::fopen(SessionPath(), "rb");
-  if (!file)
+  if (!file) {
+    SessionLog("core", std::string("no session: cannot open ") + SessionPath() + " (" +
+                           std::strerror(errno) + ")");
     return false;
+  }
   std::vector<std::uint8_t> sealed;
   std::uint8_t chunk[1024];
   std::size_t n;
   while ((n = std::fread(chunk, 1, sizeof(chunk), file)) > 0)
     sealed.insert(sealed.end(), chunk, chunk + n);
   std::fclose(file);
-  return Open("core-session", sealed.data(), sealed.size(), json);
+  const bool opened = Open("core-session", sealed.data(), sealed.size(), json);
+  const bool magic = sealed.size() >= sizeof(detail::kMagic) &&
+                     std::memcmp(sealed.data(), detail::kMagic, sizeof(detail::kMagic)) == 0;
+  SessionLog("core", std::to_string(sealed.size()) + " bytes, " +
+                         (opened  ? std::string("opened")
+                          : magic ? std::string("CANNOT OPEN: sealed with another key")
+                                  : std::string("CANNOT OPEN: not a session file")));
+  return opened;
 }
 /// @}
 
