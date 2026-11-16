@@ -198,6 +198,7 @@
   "settings_yabasanshiro_renderer": "Moteur de rendu",
   "settings_yabasanshiro_rotate_screen": "Rotation de l'Écran",
   "settings_yabasanshiro_scsp_sync": "Synchronisations du son par image",
+  "settings_yabasanshiro_high_quality_sound": "Son haute qualité",
   "settings_yabasanshiro_section_bios": "BIOS",
   "settings_yabasanshiro_section_cartridge": "Cartouche",
   "settings_yabasanshiro_section_controllers": "Manettes",

@@ -198,6 +198,7 @@
   "settings_yabasanshiro_renderer": "渲染器",
   "settings_yabasanshiro_rotate_screen": "旋转屏幕",
   "settings_yabasanshiro_scsp_sync": "每帧声音同步次数",
+  "settings_yabasanshiro_high_quality_sound": "高品质音效",
   "settings_yabasanshiro_section_bios": "BIOS",
   "settings_yabasanshiro_section_cartridge": "卡带",
   "settings_yabasanshiro_section_controllers": "手柄",

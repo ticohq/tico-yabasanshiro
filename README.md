@@ -24,6 +24,7 @@ It adds:
 -   Custom overlay matching Tico design, including time, date, user avatar, and game title
 -   A renderer choice in one build: OpenGL (devkitPro's Mesa, the lighter one) or Vulkan (NVK), which is heavier and needs an overclocked Switch to run at full speed
 -   AMD FSR 1.0 upscaling with either renderer, and with Vulkan frame generation (LSFG, with your own Lossless.dll)
+-   CRT filters (Hyllian, Lottes, NewPixie) with either renderer, and high-quality sound
 -   Button mapping, and the multitap for up to 8 players
 -   Explicit control over display (integer scaling and aspect ratios)
 -   Built-in save and load state support, with pictures, that remembers the disc of multi-disc games

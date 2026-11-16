@@ -169,7 +169,7 @@ echo "=== Build Complete ==="
 # ============================================================
 ROMFS_DIR="$YABA_DIR/yabause/src/nx/romfs"
 NRO_OUT="$SCRIPT_DIR/tico-yabasanshiro.nro"
-APP_VERSION="3.0.0"
+APP_VERSION="3.1.0"
 # the homebrew menu wants a 256x256 JPEG; another size breaks the NRO
 ICON_FILE="$YABA_DIR/yabause/src/nx/icon.jpg"
 
